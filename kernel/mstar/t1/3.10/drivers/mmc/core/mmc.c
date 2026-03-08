@@ -667,10 +667,8 @@ MMC_DEV_ATTR(fw_rev, "%02x%02x%02x%02x%02x%02x%02x%02x\n",
 		card->ext_csd.fwrev[4], card->ext_csd.fwrev[5],
 		card->ext_csd.fwrev[6], card->ext_csd.fwrev[7]);
 MMC_DEV_ATTR(pre_eol_info, "0x%x\n", card->ext_csd.pre_eol_info);
-MMC_DEV_ATTR(dev_lifetime_est_typ_a, "0x%02x\n",
-	card->ext_csd.device_life_time_est_typ_a);
-MMC_DEV_ATTR(dev_lifetime_est_typ_b, "0x%02x\n",
-	card->ext_csd.device_life_time_est_typ_b);
+MMC_DEV_ATTR(lifetime_a, "0x%x\n", card->ext_csd.device_life_time_est_typ_a);
+MMC_DEV_ATTR(lifetime_b, "0x%x\n", card->ext_csd.device_life_time_est_typ_b);
 
 static struct attribute *mmc_std_attrs[] = {
 	&dev_attr_cid.attr,
@@ -692,8 +690,8 @@ static struct attribute *mmc_std_attrs[] = {
 	&dev_attr_sectors.attr,
 	&dev_attr_fw_rev.attr,
 	&dev_attr_pre_eol_info.attr,
-	&dev_attr_dev_lifetime_est_typ_a.attr,
-	&dev_attr_dev_lifetime_est_typ_b.attr,
+	&dev_attr_lifetime_a.attr,
+	&dev_attr_lifetime_b.attr,
 	NULL,
 };
 

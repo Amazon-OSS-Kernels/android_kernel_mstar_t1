@@ -479,8 +479,6 @@ struct input_keymap_entry {
 #define KEY_POWER_CEC		252
 #define KEY_CUSTOM_4		253
 #define KEY_LIVETV		254
-#define KEY_BUTTON_1		638   /*customized button*/
-#define KEY_BUTTON_2		639   /*customized button*/
 #define KEY_VNUMPAD		748
 #define KEY_SETTINGS		750
 #define KEY_IRFALLBACK		752
