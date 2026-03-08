@@ -1,0 +1,137 @@
+diff --git a/include/bootlogo/MsBootLogo.h b/include/bootlogo/MsBootLogo.h
+old mode 100644
+new mode 100755
+index 5cfb6e7..88d35ba
+--- a/include/bootlogo/MsBootLogo.h
++++ b/include/bootlogo/MsBootLogo.h
+@@ -30,6 +30,7 @@ typedef struct
+ #else
+ #define LOGO_OFFSET_FROM_THE_END 0x80000 // SPI:512KB
+ #endif
++#define DEFAULT_BOOTLOGO_GOPIDX CONFIG_BOOTLOGO_GOPIDX
+ int do_dbtable_init(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
+ int do_bootlogo (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
+ int do_audiopreinit(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
+diff --git a/src/bootlogo/MsBootLogo.c b/src/bootlogo/MsBootLogo.c
+index 8c97446..c9060fd 100755
+--- a/src/bootlogo/MsBootLogo.c
++++ b/src/bootlogo/MsBootLogo.c
+@@ -1,5 +1,5 @@
+ /**
+-* Copyright (c) 2006 ¡V 2016 MStar Semiconductor, Inc.
++* Copyright (c) 2006 - 2016 MStar Semiconductor, Inc.
+ * This program is free software. You can redistribute it and/or modify it under the terms of
+ * the GNU General Public License as published by the Free Software Foundation;
+ * either version 2 of the License, or (at your option) any later version.
+@@ -36,7 +36,7 @@
+ #include <MsBoot.h>
+ #include <miu/MsDrvMiu.h>
+ #include <MsEnvironment.h>
+-
++#include <apiGOP.h>
+ //-------------------------------------------------------------------------------------------------
+ //  Debug Functions
+ //-------------------------------------------------------------------------------------------------
+@@ -246,6 +246,12 @@ static unsigned int Load_Photo2Dram(char *SrcPath,U32 *Dram_Addr)
+     U32 u32LogoSize=0;
+     UBOOT_TRACE("IN\n");
+ 
++    if(Dram_Addr==NULL)
++    {
++        UBOOT_ERROR("Error: Invalid Dram_Addr\n");
++        return 0;
++    }
++
+     if(SrcPath==NULL)// from MPOOL:dbtable_init
+     {
+         UBOOT_DEBUG("No SrcPath\n");
+@@ -300,6 +306,8 @@ int MsApi_GetLogoAddrs(unsigned int *phyAddr)
+         strncpy(bootlogo_buffer,"E_MMAP_ID_BOOTLOGO_BUFFER",strlen("E_MMAP_ID_BOOTLOGO_BUFFER")+1);
+         if (get_addr_from_mmap(bootlogo_buffer, phyAddr) == 0)
+         {
++            g_logoMiuIdx = MsApi_Miu_GetID((MS_U64)(*phyAddr));
++            UBOOT_DEBUG("BOOTLOGO SET GOP MIU[%d]\n",g_logoMiuIdx);
+             return 0;
+         }
+         else if (get_value_from_env(E_DFB_FRAMEBUFFER_ADR, MMAP_E_DFB_FRAMEBUFFER_ADDR, phyAddr)!=0)
+@@ -307,6 +315,8 @@ int MsApi_GetLogoAddrs(unsigned int *phyAddr)
+             UBOOT_ERROR("get %s mmap fail\n",E_DFB_FRAMEBUFFER_ADR);
+             return -1;
+         }
++        g_logoMiuIdx = MsApi_Miu_GetID((MS_U64)(*phyAddr));
++        UBOOT_DEBUG("BOOTLOGO SET GOP MIU[%d]\n",g_logoMiuIdx);
+     }
+     else
+     {
+@@ -319,12 +329,13 @@ int MsApi_GetLogoAddrs(unsigned int *phyAddr)
+             get_length_from_mmap(bootlogo_buffer,&u32LogoBufSize);
+             if((u32LogoBufSize&0xfffffff) >= BOOTLOGO_BUFFER_SIZE)
+             {
+-                g_logoMiuIdx = MsApi_Miu_GetID(*phyAddr);
++                g_logoMiuIdx = MsApi_Miu_GetID((MS_U64)(*phyAddr));
+                 bDelayLogo = TRUE;
+                 return 0;
+             }
+         }
+ 
++        memset (bootlogo_buffer, 0, CMD_BUF);
+         // check if users define another buffer to store the bootlogo
+         if ((p_str = getenv("bootlogo_buffer")) != NULL)
+         {
+@@ -346,9 +357,9 @@ int MsApi_GetLogoAddrs(unsigned int *phyAddr)
+             get_length_from_mmap(bootlogo_buffer,&u32LogoBufSize);
+             if((u32LogoBufSize&0xfffffff) >= BOOTLOGO_BUFFER_SIZE)
+             {
+-                g_logoMiuIdx = MsApi_Miu_GetID(*phyAddr);
+-                bDelayLogo = TRUE;
+-            }
++                g_logoMiuIdx = MsApi_Miu_GetID((MS_U64)(*phyAddr));
++                bDelayLogo = TRUE;  
++            }                
+             else
+             {
+                 UBOOT_ERROR("fail to delay bootlogo because the size of buffer is less than 4MB (1366*768 *ARGB),\n");
+@@ -369,6 +380,8 @@ int showLogo(LogoDispConfigParams stConfig,U32 JPD_OUTADDR)
+     MS_BOOL bHorStretch=stConfig.bHorStretch;
+     MS_BOOL bVerStretch=stConfig.bVerStretch;
+     unsigned int u32Addr=0;
++    U8 u8logoGopIdx = 0;
++
+     UBOOT_TRACE("IN\n");
+ 
+     src_info.u32Addr = JPD_OUTADDR;
+@@ -456,7 +469,33 @@ int showLogo(LogoDispConfigParams stConfig,U32 JPD_OUTADDR)
+     UBOOT_DEBUG("dst_info.u32Height=0x%x\n",(unsigned int)dst_info.u32Height);
+     #endif
+ 
+-    MsApiDisplay_Logo(&rect,&src_info,&dst_info,bHorStretch,bVerStretch,stConfig.u16DispX,stConfig.u16DispY);
++     // initilize the GOP of Subtitle instead of UI;
++    // otherwise, then bootlogo will be closed unexpectedly,
++    // because UI is initilalized during booting up
++    char* p_str = getenv("bootlogo_gopidx");
++    if(p_str==NULL)
++    {
++        st_sys_misc_setting misc_setting;
++        if(Read_MiscSetting_ToFlash(&misc_setting) == -1)//read misc setting fail, set gop index to default value
++        {
++            u8logoGopIdx = DEFAULT_BOOTLOGO_GOPIDX;
++        }
++        else
++        {
++            u8logoGopIdx = misc_setting.m_u8LogoGopIdx;
++        }
++    }
++    else
++    {
++        u8logoGopIdx = simple_strtoul(p_str, NULL, 10);
++    }
++    if (isBootToRecovery() != 0)
++    {
++        // recovery mode bootlogo use gop 0
++        u8logoGopIdx = 0;
++    }
++    UBOOT_INFO("[%s] GOP Boot Logo Index %d \n",__FUNCTION__,(int)u8logoGopIdx);
++    MsApiDisplay_Logo(u8logoGopIdx,&rect,&src_info,&dst_info,bHorStretch,bVerStretch,stConfig.u16DispX,stConfig.u16DispY);
+     UBOOT_TRACE("OK\n");
+     return 0;
+ }

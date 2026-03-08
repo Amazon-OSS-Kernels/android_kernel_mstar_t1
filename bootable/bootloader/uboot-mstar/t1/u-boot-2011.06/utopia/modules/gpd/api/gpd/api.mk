@@ -1,0 +1,1 @@
+API_TMP_OBJ =  /home/ssd/jimmy-cm.chen/main/bootable/bootloader/uboot-mstar/t1/u-boot-2011.06/utopia/build/obj/apiGPD.o /home/ssd/jimmy-cm.chen/main/bootable/bootloader/uboot-mstar/t1/u-boot-2011.06/utopia/build/obj/apiGPD_v2.o

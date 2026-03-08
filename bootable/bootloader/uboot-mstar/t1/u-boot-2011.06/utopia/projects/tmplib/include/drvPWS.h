@@ -1,0 +1,460 @@
+/**
+* Copyright (c) 2006 – 2018 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of
+* the GNU General Public License as published by the Free Software Foundation;
+* either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program;
+* if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
+* MA 02111-1307, USA.
+*/
+//******************************************************************************
+//******************************************************************************
+////////////////////////////////////////////////////////////////////////////////
+
+/*! \defgroup G_PWS PWS interface
+    \ingroup  G_PERIPHERAL
+
+    \brief 
+    Load power settings of demo atop and video atop at a specified source.
+    
+    <b>Features</b>
+
+    - Load power settings.
+
+    <b> PWS Block Diagram: </b> \n
+    
+    NA
+    
+    \defgroup G_PWS_INIT Initialization Task relative
+    \ingroup  G_PWS
+    \defgroup G_PWS_COMMON Common Task relative
+    \ingroup  G_PWS
+    \defgroup G_PWS_CONTROL Control relative
+    \ingroup  G_PWS
+    \defgroup G_PWS_OTHER  other relative
+    \ingroup  G_PWS
+    \defgroup G_PWS_ToBeModified PWS api to be modified
+    \ingroup  G_PWS
+    \defgroup G_PWS_ToBeRemove PWS api to be removed
+    \ingroup  G_PWS
+*/
+
+#ifndef _DRVPWS_H_
+#define _DRVPWS_H_
+
+////////////////////////////////////////////////////////////////////////////////
+/// @file drvPWS.h
+/// @brief power saving driver
+////////////////////////////////////////////////////////////////////////////////
+
+//------------------------------------------------------------------------------
+// Header Files
+//------------------------------------------------------------------------------
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#include "MsCommon.h"
+#include "MsTypes.h"
+
+//-------------------------------------------------------------------------------------------------
+//  Macro and Define
+//-------------------------------------------------------------------------------------------------
+#define MSIF_PWS_LIB_CODE                     {'P','W','S','_'}        //Lib code
+#define MSIF_PWS_LIBVER                       {'0','2'}            //LIB version
+#define MSIF_PWS_BUILDNUM                     {'0','9'}            //Build Number
+#define MSIF_PWS_CHANGELIST                   {'0','0','4','4','8','1','7','6'} //P4 ChangeList Number
+
+#define PWS_API_VERSION                /* Character String for DRV/API version             */  \
+    MSIF_TAG,                           /* 'MSIF'                                           */  \
+    MSIF_CLASS,                         /* '00'                                             */  \
+    MSIF_CUS,                           /* 0x0000                                           */  \
+    MSIF_MOD,                           /* 0x0000                                           */  \
+    MSIF_CHIP,                                                                                  \
+    MSIF_CPU,                                                                                   \
+    MSIF_PWS_LIB_CODE,                        /* IP__                                             */  \
+    MSIF_PWS_LIBVER,                          /* 0.0 ~ Z.Z                                        */  \
+    MSIF_PWS_BUILDNUM,                        /* 00 ~ 99                                          */  \
+    MSIF_PWS_CHANGELIST,                      /* CL#                                              */  \
+    MSIF_OS
+
+#define SIOCDEVON       0x89F1
+#define SIOCDEVOFF      0x89F2
+
+#define PWS_VERSION            0x00000001
+
+
+//-------------------------------------------------------------------------------------------------
+//  Type and Structure
+//-------------------------------------------------------------------------------------------------
+
+typedef enum
+{
+    PWS_FAIL    = 0,
+    PWS_SUCCESS = 1
+} E_PWS_Result;
+
+#if defined (MSOS_TYPE_LINUX)
+typedef enum
+{
+    PHY_OFF    = 0,
+    PHY_ON   = 1
+} E_PWS_PHY;
+#endif
+
+typedef enum
+{
+    PWS_ADD_SOURCE  = 0,
+    PWS_DEL_SOURCE  = 1,
+    PWS_INVAILD_OP  = 2
+} E_PWS_Operation;
+
+typedef enum
+{
+    PWS_FULL    = 0,
+    PWS_OFF_LINE_DETECT = 1
+} E_PWS_Sync;
+
+typedef enum
+{
+    _NO_SOURCE_   = 0,
+    _USB_         = BIT_(0),
+    _SV_          = BIT_(1),
+    _HDMI4_       = BIT_(2),
+    _HDMI3_       = BIT_(3),
+    _HDMI2_       = BIT_(4),
+    _HDMI1_       = BIT_(5),
+    _YPbPr_       = BIT_(6),
+    _SCART_       = BIT_(7),
+    _RGB_         = BIT_(8),
+    _CVBS_        = BIT_(9),
+    _ATV_SSIF_    = BIT_(10),
+    _ATV_VIF_     = BIT_(11),
+    _DTV_ATSC_    = BIT_(12),
+    _DTV_DVB_     = BIT_(13),
+    _CVBSOe_      = BIT_(14),
+    _CVBSOi_      = BIT_(15),
+    _UNKNOWN_     = BIT_(16)
+} E_PWS_SouceInfo;
+
+typedef enum
+{
+    E_PWS_DBGLV_NONE,          //no debug message
+    E_PWS_DBGLV_ERR_ONLY,      //show error only
+    E_PWS_DBGLV_REG_DUMP,      //show error & reg dump
+    E_PWS_DBGLV_INFO,          //show error & informaiton
+    E_PWS_DBGLV_ALL            //show error, information & funciton name
+} E_PWS_DBG_LEVEL;
+
+typedef struct
+{
+    E_PWS_DBG_LEVEL u8DbgLevel;
+    MS_BOOL bInit;
+} PWS_Status;
+
+typedef struct
+{
+    E_PWS_SouceInfo SourceList;
+    MS_U32 u32IOMap;
+} PWS_Info;
+
+typedef enum
+{
+    E_PWS_API_UNUSED = 0,
+    E_PWS_USE_HANDLE_SOURCE = 1,
+    E_PWS_USE_HANDLE_IP = 2
+} E_PWS_Use;
+
+typedef enum
+{
+    E_PWS_IP_ON  = 0,
+    E_PWS_IP_OFF = 1
+} E_PWS_IpPowerCtrl;
+
+typedef enum
+{
+    E_PWS_IP_CALLBACK_BEFORE_ON  = 0,
+    E_PWS_IP_CALLBACK_BEFORE_OFF = 1,
+    E_PWS_IP_CALLBACK_AFTER_ON   = 2,
+    E_PWS_IP_CALLBACK_AFTER_OFF  = 3,
+    E_PWS_IP_CALLBACK_UNKNOWN = 4
+} E_PWS_CallbackCtrl;
+
+#define STR_LEN     32
+typedef void (*P_PWS_Callback)(void);
+typedef struct
+{
+    E_PWS_CallbackCtrl ctrl;
+    unsigned char regName[STR_LEN];
+    P_PWS_Callback _PWSCallback;
+} PWS_RegisterCallback;
+
+typedef enum
+{
+    E_PWS_VIF_NO_SAW     = 0,
+    E_PWS_VIF_SINGLE_SAW = 1,
+    E_PWS_VIF_DUAL_SAW   = 2,
+    E_PWS_VIF_SINGLE_SAW_DIF = 3,
+    E_PWS_VIF_UNKNOWN    = 3
+} E_PWS_VIF_type;
+
+#define PWS_Register_CB_size    2
+
+
+typedef enum
+{
+    E_PWS_IP_AUDIO = 0,
+    E_PWS_IP_DEMOD,
+    E_PWS_IP_AUPLL,
+    E_PWS_IP_USB_PORT0,
+    E_PWS_IP_USB_PORT1,
+    E_PWS_IP_USB_PORT2,
+    E_PWS_IP_USB_PORT3,
+    E_PWS_IP_USB_3,
+    E_PWS_IP_MHL,
+    E_PWS_IP_VEDIO,
+    E_PWS_IP_ATSC_DVBTC,
+    E_PWS_IP_GME,
+    E_PWS_IP_GMAC,
+    E_PWS_IP_IDAC,
+    E_PWS_IP_ETH,
+    E_PWS_IP_TSP,    
+    E_PWS_IP_CLK_R2_SECURE,
+    E_PWS_IP_VE,
+    E_PWS_IP_AUDIO_R2,    
+    E_PWS_IP_MAX
+} E_PWS_IP_name;
+
+//------------------------------------------------------------------------------
+// Extern Function
+//------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+// E_PWS_Result MDrv_PWS_GetLibVer(const MSIF_Version **ppVersion);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+E_PWS_Result MDrv_PWS_SetDbgLevel(E_PWS_DBG_LEVEL eLEVEL);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+void         MDrv_PWS_GetInfo(PWS_Info *pInfo); // ToBeRemove
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+void         MDrv_PWS_GetStatus(PWS_Status *pStatus);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+E_PWS_SouceInfo MDrv_PWS_GetSourceInfo(void);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+// MS_U16       MDrv_PWS_Read2Byte(MS_U32 u32RegAddr );
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+// E_PWS_Result MDrv_PWS_IpPowerControl(E_PWS_IP_name eIpName, E_PWS_IpPowerCtrl pwr_type);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_INIT
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+E_PWS_Result MDrv_PWS_Init(E_PWS_VIF_type eVifType);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_CONTROL
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+E_PWS_Result MDrv_PWS_HandleSource(E_PWS_Operation operation,E_PWS_SouceInfo source,E_PWS_Sync sync_type);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_ToBeRemove
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+// E_PWS_Result MDrv_PWS_HandleIP(E_PWS_IpPowerCtrl IpPowerCtrl,const unsigned char *RegName); // ToBeRemove
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+// E_PWS_Result MDrv_PWS_RegisterCallback(MS_U8 index,E_PWS_CallbackCtrl cb_ctrl,unsigned char *RegName,P_PWS_Callback pfCallback);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+// E_PWS_Result MDrv_PWS_CancelCallback(MS_U8 index);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_COMMON
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+MS_U32 MDrv_PWS_SetPowerState(EN_POWER_MODE u16PowerState);
+#if defined (MSOS_TYPE_LINUX)
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_ToBeRemove
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+E_PWS_Result MDrv_PWS_PHYPower(E_PWS_PHY bSetFlag); // ToBeRemove
+#endif
+
+//------------------------------------------------------------------------------------
+//  Utopia 2.0 
+//------------------------------------------------------------------------------------
+typedef enum {
+    MDrv_CMD_PWS_GetLibVer,
+    MDrv_CMD_PWS_SetDbgLevel,    
+    MDrv_CMD_PWS_HandleSource,
+    MDrv_CMD_PWS_PHYPower,
+} ePwsIoctlOpt;
+
+typedef E_PWS_Result (*IOCTL_PWS_GETLIBVER)(const MSIF_Version **);
+typedef E_PWS_Result (*IOCTL_PWS_SETDBGLEVEL)(E_PWS_DBG_LEVEL);
+typedef E_PWS_Result (*IOCTL_PWS_HANDLESOURCE)(E_PWS_Operation, E_PWS_SouceInfo, E_PWS_Sync);
+#if defined (MSOS_TYPE_LINUX)
+typedef E_PWS_Result (*IOCTL_PWS_PHYPOWER)(E_PWS_PHY);
+#endif
+
+typedef struct _PWS_INSTANT_PRIVATE
+{
+    IOCTL_PWS_GETLIBVER            fpPWSGetLibVer;
+    IOCTL_PWS_SETDBGLEVEL          fpPWSSetDbgLevel;
+    IOCTL_PWS_HANDLESOURCE         fpPWSHandleSource;
+#if defined (MSOS_TYPE_LINUX)
+    IOCTL_PWS_PHYPOWER             fpPWSPHYPower;
+#endif
+}PWS_INSTANT_PRIVATE;
+
+// for pws MDrv_PWS_GetLibVer
+typedef struct _PWS_GETLIBVER_PARAM
+{
+    const MSIF_Version **ppVersion;
+}PWS_GETLIBVER_PARAM, *PPWS_GETLIBVER_PARAM;
+
+// for pws MDrv_PWS_SetDbgLevel
+typedef struct _PWS_SETDBGLEVEL_PARAM
+{
+    E_PWS_DBG_LEVEL DbgLevel;
+}PWS_SETDBGLEVEL_PARAM, *PPWS_SETDBGLEVEL_PARAM;
+
+// for pws MDrv_PWS_HandleSource
+typedef struct _PWS_HANDLESOURCE_PARAM
+{
+    E_PWS_Operation operation;
+    E_PWS_SouceInfo source;
+    E_PWS_Sync sync_type;
+}PWS_HANDLESOURCE_PARAM, *PPWS_HANDLESOURCE_PARAM;
+
+#if defined (MSOS_TYPE_LINUX)
+// for pws MDrv_PWS_PHYPower
+typedef struct _PWS_PHYPOWER_PARAM
+{
+    E_PWS_PHY bSetFlag;
+}PWS_PHYPOWER_PARAM, *PPWS_PHYPOWER_PARAM;
+#endif
+
+// void PWSRegisterToUtopia(FUtopiaOpen ModuleType);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_ToBeRemove
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+MS_U32 PWSOpen(void** pInstance, MS_U32 u32ModuleVersion, void* pAttribute);
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_ToBeRemove
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+// MS_U32 PWSClose(void* pInstance); 
+//-------------------------------------------------------------------------------------------------
+/// MOBF Encrypt
+/// @ingroup G_PWS_ToBeRemove
+/// @param u32Key \b IN: Key
+/// @param bEnable \b IN: TRUE/FLASE
+/// @return DRVAESDMA_OK : Success
+/// @return Others : Fail
+//-------------------------------------------------------------------------------------------------
+// MS_U32 PWSIoctl(void* pInstance, MS_U32 u32Cmd, void *pArgs); 
+
+//PWS_Private
+typedef struct _PWS_RESOURCE_PRIVATE
+{
+    MS_U32 Dummy;
+}PWS_RESOURCE_PRIVATE;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

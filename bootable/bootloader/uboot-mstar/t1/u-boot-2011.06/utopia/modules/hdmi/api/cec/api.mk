@@ -1,0 +1,1 @@
+API_TMP_OBJ =  /home/ssd/jimmy-cm.chen/main/bootable/bootloader/uboot-mstar/t1/u-boot-2011.06/utopia/build/obj/apiCEC_v2.o /home/ssd/jimmy-cm.chen/main/bootable/bootloader/uboot-mstar/t1/u-boot-2011.06/utopia/build/obj/apiCEC.o

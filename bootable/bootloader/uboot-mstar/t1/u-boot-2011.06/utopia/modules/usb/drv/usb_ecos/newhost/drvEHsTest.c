@@ -1,0 +1,198 @@
+/**
+* Copyright (c) 2006 – 2018 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of
+* the GNU General Public License as published by the Free Software Foundation;
+* either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program;
+* if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
+* MA 02111-1307, USA.
+*/
+//******************************************************************************
+//******************************************************************************
+/*
+ * (C) Copyright MStarSemi 2012
+ *
+ * Embedded high-speed host electric test procedure
+ *
+ */
+//#include <MsCommon.h>  // NUSED
+
+#include  "include/drvList.h"
+
+// USB related header files
+//#include "drvUSB.h" // NUSED
+#include "drvUsbd.h"
+#include "drvEHCI.h"
+#include "drvUSBHwCtl.h"
+/* applying drvUSB.h (inside drvUSBHwCtl.h) */
+
+void issueSE0(struct usb_hcd *hcd)
+{
+    struct cpe_dev *dev;
+    const struct device_s *__mptr = hcd->controller;
+    dev = (struct cpe_dev *)( (char *)__mptr - offsetof(struct cpe_dev,dev) );
+    U32 regUTMI = dev->utmibase;
+
+    diag_printf("SE0 on port %d\n", (int)hcd->host_id);
+    usb_writew(0x0e00, (void*) (regUTMI+0x10*2));
+}
+
+void issueTestJ(struct usb_hcd *hcd)
+{
+    struct cpe_dev *dev;
+    const struct device_s *__mptr = hcd->controller;
+    dev = (struct cpe_dev *)( (char *)__mptr - offsetof(struct cpe_dev,dev) );
+    U32 regUHC = dev->uhcbase;
+    U32 regUTMI = dev->utmibase;
+
+    diag_printf("TEST_J on port %d\n", (int)hcd->host_id);
+    usb_writew(0x0, (void*) (regUTMI+0x2c*2));
+    usb_writew(0x0, (void*) (regUTMI+0x2e*2));
+    usb_writeb(usb_readb((void*)(regUHC+0x50*2)) | 0x01, (void*) (regUHC+0x50*2)); //enable test J  
+}
+ 
+void issueTestK(struct usb_hcd *hcd)
+{
+    struct cpe_dev *dev;
+    const struct device_s *__mptr = hcd->controller;
+    dev = (struct cpe_dev *)( (char *)__mptr - offsetof(struct cpe_dev,dev) );
+    U32 regUHC = dev->uhcbase;    
+    U32 regUTMI = dev->utmibase;
+
+    diag_printf("TEST_K on port %d\n", (int)hcd->host_id);    
+    usb_writew(0x0, (void*) (regUTMI+0x2c*2));
+    usb_writew(0x0, (void*) (regUTMI+0x2e*2));
+    usb_writeb(usb_readb((void*)(regUHC+0x50*2)) | 0x02, (void*) (regUHC+0x50*2)); //enable test K  
+}
+
+void issueTestPacket(struct usb_hcd *hcd)
+{
+    struct cpe_dev *dev;
+    const struct device_s *__mptr = hcd->controller;
+    dev = (struct cpe_dev *)( (char *)__mptr - offsetof(struct cpe_dev,dev) );
+    U32 regUTMI = dev->utmibase;
+
+    diag_printf("Test packet on port %d\n", (int)hcd->host_id);
+    usb_writew(0x0600, (void*) (regUTMI+0x14*2)); //
+    usb_writew(0x0038, (void*) (regUTMI+0x10*2)); //
+    usb_writew(0x0BFE, (void*) (regUTMI+0x32*2)); //
+}
+
+extern struct list_head *ms_qh_urb_transaction_EHSET (struct ehci_hcd *ehci, struct urb *urb, struct list_head *head, int iFlags, int iStage);
+extern int ms_submit_async_EHSET (struct ehci_hcd *ehci, struct urb *urb, struct list_head *qtd_list, int mem_flags);
+int ms_ehci_urb_enqueue_EHSET (
+  struct usb_hcd  *hcd,
+  struct urb  *urb,
+  int    mem_flags
+) 
+{
+     struct ehci_hcd    *ehci = hcd_to_ehci (hcd);
+     U32 i, val;
+     struct list_head  qtd_list;
+     struct usb_api_data *awd = (struct usb_api_data *)urb->pContext;
+     
+     ms_list_init (&qtd_list);
+     diag_printf("SETUP\n");
+     if (!ms_qh_urb_transaction_EHSET (ehci, urb, &qtd_list, mem_flags, 0))
+        return -ENOMEM;
+     val =  ms_submit_async_EHSET (ehci, urb, &qtd_list, mem_flags);
+     if (val)
+    {
+        diag_printf("<ms_ehci_urb_enqueue_EHSET> submit setup fail!\n");
+        return val;
+    }
+     diag_printf("delay 15 seconds\t");
+     for (i=0; i<14; i++)
+     {
+         mdelay(1000);
+         diag_printf("+");
+     }
+     diag_printf("\n");
+     diag_printf("DATA/STATUS\n");
+     if (!ms_qh_urb_transaction_EHSET (ehci, urb, &qtd_list, mem_flags, 1))
+         return -ENOMEM;
+     awd->done = 0;
+     return ms_submit_async_EHSET (ehci, urb, &qtd_list, mem_flags);
+}
+ 
+#define TMODE_VID                           0x1A0A
+#define TMODE_TEST_SE0_NAK                  0x0101
+#define TMODE_TEST_J                        0x0102
+#define TMODE_TEST_K                        0x0103
+#define TMODE_TEST_PACKET                   0x0104
+#define TMODE_PORT_SUSPEND_RESUME           0x0106
+#define TMODE_SINGLE_STEP_GET_DEV_DESC      0x0107
+#define TMODE_SINGLE_STEP_SET_FEATURE       0x0108
+#define TMODE_NO_SESSION_TRAN_TEST          0x0200
+int ms_usb_test_proc_vid(U16 vid, U16 pid)
+{
+    if (vid == TMODE_VID)
+    {
+        if ((pid == TMODE_TEST_SE0_NAK) || (pid == TMODE_TEST_J) || (pid == TMODE_TEST_K) || (pid == TMODE_TEST_PACKET))
+            return 1;
+        else if (pid == TMODE_NO_SESSION_TRAN_TEST)
+            return 3; // through normal enumeration flow
+        else
+            return 2;
+    }
+    else
+        return 0;
+}
+#if 0 // NUSED
+extern int ehci_urb_enqueue_tst (
+  struct usb_hcd  *hcd,
+  struct urb  *urb,
+  int    mem_flags
+);
+#endif
+void ms_usb_high_speed_test_proc(struct usb_device *udev, int flag)
+{
+    struct usb_hcd *hcd = udev->bus->hcpriv;
+    U32 i;
+
+    if (flag == 1)
+        MsOS_DisableAllInterrupts();
+    switch (udev->descriptor.idProduct)
+    {
+        case TMODE_TEST_SE0_NAK:
+            issueSE0(hcd);
+            break;
+        case TMODE_TEST_J:
+            issueTestJ(hcd);
+            break;
+        case TMODE_TEST_K:
+            issueTestK(hcd);
+            break;
+        case TMODE_TEST_PACKET:
+            issueTestPacket(hcd);
+            break;
+        case TMODE_SINGLE_STEP_GET_DEV_DESC:
+            diag_printf("Single step get device descriptor, delay 15 second\t");
+            for (i=0; i<14; i++)
+            {
+                mdelay(1000);
+                diag_printf("+");
+            }
+            diag_printf("\n");
+            ms_usb_get_dev_descriptor(udev);
+            break;
+        case TMODE_SINGLE_STEP_SET_FEATURE:
+            diag_printf("Single step set feature\n");
+            hcd->ms_urb_enqueue = ms_ehci_urb_enqueue_EHSET; // re-assign urb_enqueue
+            ms_usb_get_dev_descriptor(udev);
+            break;
+        default:
+            diag_printf("Not supported!!!\n");
+    }
+    
+    if (flag == 2)
+        MsOS_DisableAllInterrupts();
+    diag_printf("Embedded host test procedure end\n");
+    while(1); // pause here
+}
+

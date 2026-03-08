@@ -1,0 +1,56 @@
+/**
+* Copyright (c) 2006 ¡V 2016 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of
+* the GNU General Public License as published by the Free Software Foundation;
+* either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program;
+* if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
+* MA 02111-1307, USA.
+*/
+
+#ifndef __DRV_URSA_7_H__
+#define __DRV_URSA_7_H__
+
+#include <MsTypes.h>
+#include <apiSWI2C.h>
+#include <common.h>
+
+//-------------------------------------------------------------------------------------------------
+//  struction define
+//-------------------------------------------------------------------------------------------------
+typedef enum
+{
+    UC_INIT_RX_ALL_1,
+    UC_INIT_RX_ALL_2,
+    UC_SET_IN_VIDEO_SIZE,//        = 0x105,
+    UC_SET_LVDS_RX_RECONFIG,//     = 0x106,
+    UC_SET_3D_MODE,            //  = 0x301,
+    UC_WRITE_REGISTER_1,           //0x31B
+    UC_WRITE_REGISTER_2,
+    UC_WRITE_REGISTER_3,
+    UC_WRITE_REGISTER_MASK_1,
+    UC_WRITE_REGISTER_MASK_2,
+    UC_URSA_MOD_POWER_ON
+}URSA_7_CMD_TYPE;
+
+//-------------------------------------------------------------------------------------------------
+//  Function declare
+//-------------------------------------------------------------------------------------------------
+void MDrv_Ursa_7_SWI2C_Init(void);
+MS_BOOL MDrv_Ursa_7_SWI2C_WriteBytes(MS_U16 u16BusNumSlaveID, MS_U8 u8addrnum, MS_U8* pu8addr, MS_U16 u16size, MS_U8* pu8data);
+MS_BOOL MDrv_Ursa_7_SWI2C_ReadBytes(MS_U16 u16BusNumSlaveID, MS_U8 u8addrnum, MS_U8* pu8addr, MS_U16 u16size, MS_U8* pu8data);
+MS_BOOL MDrv_Ursa_7_SendCmd(URSA_7_CMD_TYPE eCmdType);
+MS_BOOL MDrv_Ursa_7_Write_Cmd(MS_U8 *pu8CmdData);
+
+
+MS_BOOL MDrv_Ursa_7_Set_2_lane_VB1(void);
+MS_BOOL MDrv_Ursa_7_Set_2_lane_VB1_per_init(void);
+
+
+#endif //__DRV_URSA_7_H__
+

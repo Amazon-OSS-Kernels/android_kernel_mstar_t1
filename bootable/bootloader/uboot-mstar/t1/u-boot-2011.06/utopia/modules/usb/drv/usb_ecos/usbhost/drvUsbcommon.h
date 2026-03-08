@@ -1,0 +1,168 @@
+/**
+* Copyright (c) 2006 – 2018 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of
+* the GNU General Public License as published by the Free Software Foundation;
+* either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program;
+* if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
+* MA 02111-1307, USA.
+*/
+//******************************************************************************
+//******************************************************************************
+#ifndef __USBCOMMON_H
+#define __USBCOMMON_H
+
+#include "asmCPU.h"
+
+
+typedef void* (*mem_Alloc)(int size);
+typedef void (*mem_Free)(void* pBuf);
+typedef MS_U32 (*mem_VA2PA)(MS_U32 addr);
+typedef MS_U32 (*mem_PA2VA)(MS_U32 addr, int bCached);
+typedef void* (*mem_Cached2Noncached)(MS_U32 addr);
+typedef void* (*mem_NonCached2Cached)(MS_U32 addr);
+
+
+extern mem_Alloc    pfnAllocCachedMem, pfnAllocNoncachedMem;
+extern mem_Free     pfnFreeCachedMem, pfnFreeNoncachedMem;
+extern mem_VA2PA    pfnVA2PA;
+extern mem_PA2VA    pfnPA2VA;
+extern mem_Cached2Noncached     pfnCached2Noncached;
+extern mem_NonCached2Cached     pfnNoncached2Cached;
+
+#if 1
+#define Usb_AllocateNonCachedMemory(x)  pfnAllocNoncachedMem(x)
+#define Usb_FreeNonCachedMemory(x)      pfnFreeNoncachedMem(x)
+#define Usb_AllocateCachedMemory(x)     pfnAllocCachedMem(x)
+#define Usb_FreeCachedMemory(x)         pfnFreeCachedMem(x)
+
+
+//extern void* (*kmalloc)(int size, int flag); 
+//extern void  (*kfree)(void* pBuf); 
+#define kmalloc(size, flag)             pfnAllocCachedMem(size)
+#define kfree(pBuf)                     pfnFreeCachedMem(pBuf)
+
+#define USB_VA2PA(addr)                 pfnVA2PA(addr)
+#else
+#define Usb_AllocateNonCachedMemory(x)  kmalloc(x, 0)
+#define Usb_FreeNonCachedMemory(x)      kfree(x)
+#define Usb_AllocateCachedMemory(x)     kmalloc(x, 0)
+#define Usb_FreeCachedMemory(x)         kfree(x)
+#endif
+
+#if 1
+#define KSEG02KSEG1(addr)       pfnCached2Noncached((MS_U32)addr)  //cached -> unchched, 20111017 for K2
+#define KSEG12KSEG0(addr)       pfnNoncached2Cached((MS_U32)addr) //unchched -> cached
+#else
+#define KSEG02KSEG1(addr)       ((void *)((MS_U32)(addr)|0x20000000))  //cached -> unchched
+#define KSEG12KSEG0(addr)       ((void *)((MS_U32)(addr)&~0x20000000)) //unchched -> cached
+#endif
+
+#ifndef U32
+#define U32 MS_U32
+#endif
+
+#ifndef U16
+#define U16 MS_U16
+#endif
+
+#ifndef U8
+#define U8 MS_U8
+#endif
+
+#ifndef S32
+#define S32 MS_S32
+#endif
+
+#ifndef S16
+#define S16 MS_S16
+#endif
+
+#ifndef S8
+#define S8 MS_S8
+#endif
+
+#ifndef __u32
+#define __u32 MS_U32
+#endif
+
+#ifndef __u16
+#define __u16 MS_U16
+#endif
+
+#ifndef __u8
+#define __u8 MS_U8
+#endif
+
+#ifndef __s32
+#define __s32 MS_S32
+#endif
+
+#ifndef __s16
+#define __s16 MS_S16
+#endif
+
+#ifndef __s8
+#define __s8 MS_S8
+#endif
+
+#ifndef BOOL
+#define BOOL MS_BOOL
+#endif
+
+#ifndef BOOLEAN
+#define BOOLEAN MS_BOOL
+#endif
+
+
+#ifdef MS_DEBUG
+#define ASSERT(_bool_)                                                                                      \
+        {                                                                                                   \
+            if ( ! ( _bool_ ) )                                                                             \
+            {                                                                                               \
+                diag_printf("ASSERT FAIL: %s, %s %s %d\n", #_bool_, __FILE__, __PRETTY_FUNCTION__, __LINE__);\
+                MAsm_CPU_SwDbgBp();                                                                       \
+            }                                                                                               \
+        }
+#else
+#define ASSERT(_bool_)                                                                                      \
+        {                                                                                                   \
+            if ( ! ( _bool_ ) )                                                                             \
+            {                                                                                               \
+                diag_printf("ASSERT FAIL: %s %s %s %d\n", #_bool_, __FILE__, __PRETTY_FUNCTION__, __LINE__); \
+            }                                                                                               \
+        }
+#endif
+
+
+
+#define MsOS_DiableAllInterrupts() MsOS_DisableAllInterrupts()
+
+externC int  diag_printf( const char *fmt, ... );
+
+//Chip ID deifinition
+#define CHIPID_NEPTUNE     0x2
+#define CHIPID_ERIS        0x3
+#define CHIPID_TITANIA     0x4
+#define CHIPID_PLUTO       0x5
+#define CHIPID_TRITON      0x6
+#define CHIPID_TITANIA2    0xB
+#define CHIPID_TITANIA3    0xF
+#define CHIPID_EUCLID      0x15
+#define CHIPID_TITANIA4    0x18
+#define CHIPID_URANUS4     0x1B
+#define CHIPID_TITANIA7    0x1C
+#define CHIPID_JANUS       0x1D
+#define CHIPID_TITANIA8    0x1F
+#define CHIPID_TITANIA9    0x23
+#define CHIPID_KRONUS      0x2F
+#define CHIPID_KAISERIN      0x41
+
+
+#endif
+
