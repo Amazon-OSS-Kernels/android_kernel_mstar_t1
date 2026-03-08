@@ -317,8 +317,8 @@ static ssize_t _MDrv_IIC_Read(struct file *filp, char __user *buf, size_t count,
                 {
 			IIC_PRINT("\033[0;32;31m [Ian] %s %d Error\033[m\n", __func__, __LINE__);
 			}
-			
-		if( copy_to_user(data32->u8pbufIIC, data->u8pbufIIC, sizeof(U8)*u32RetCountIIC) )
+
+		if (copy_to_user(data32->u8pbufIIC, IIC_ReadParam.u8pbufIIC, sizeof(U8)*u32RetCountIIC))
                 {
 				IIC_PRINT("\033[0;32;31m [Ian] %s %d \033[m\n", __func__, __LINE__);
 				return (-1);

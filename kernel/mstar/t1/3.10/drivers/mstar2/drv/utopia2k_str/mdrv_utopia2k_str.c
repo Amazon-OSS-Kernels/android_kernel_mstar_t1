@@ -81,8 +81,16 @@ static void get_wakeup_reason()
 			sprintf(power_on_src_name, "%s_%c", "app", *(tmpPtr+11));
 		}
 
+		if (strstr(wakeup_src_name, "KEY_BUTTON1"))
+			sprintf(power_on_src_name, "%s", "customized button 1");
+
+		if (strstr(wakeup_src_name, "KEY_BUTTON2"))
+			sprintf(power_on_src_name, "%s", "customized button 2");
+
 		if (strstr(wakeup_src_name, "KEY_POWER"))
 			sprintf(power_on_src_name, "%s", "power");
+
+
 
 		pm_report_wakeup = 1;
 		break;
@@ -623,6 +631,8 @@ static int mstar_utopia2k_str_drv_probe(struct platform_device *pdev)
 	input_set_capability(input, EV_KEY, KEY_CUSTOM_1);
 	input_set_capability(input, EV_KEY, KEY_CUSTOM_2);
 	input_set_capability(input, EV_KEY, KEY_CUSTOM_3);
+	input_set_capability(input, EV_KEY, KEY_BUTTON_1);
+	input_set_capability(input, EV_KEY, KEY_BUTTON_2);
 	input_set_capability(input, EV_KEY, KEY_POWER_CEC);
 	error = input_register_device(input);
 	if (error)
