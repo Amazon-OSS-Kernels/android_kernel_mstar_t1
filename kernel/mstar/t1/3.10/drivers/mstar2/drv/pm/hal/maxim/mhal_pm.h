@@ -1,0 +1,42 @@
+/**
+* Copyright (c) 2006 ¡V 2017 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of
+* the GNU General Public License as published by the Free Software Foundation;
+* either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program;
+* if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
+* MA 02111-1307, USA.
+*/
+
+#ifndef _HAL_PM_H_
+#define _HAL_PM_H_
+
+
+//-------------------------------------------------------------------------------------------------
+//  Macro and Define
+//-------------------------------------------------------------------------------------------------
+
+
+//-------------------------------------------------------------------------------------------------
+//  Structure and Enum
+//-------------------------------------------------------------------------------------------------
+
+
+
+//-------------------------------------------------------------------------------------------------
+//  Function and Variable
+//-------------------------------------------------------------------------------------------------
+PM_Result MHal_PM_SetSRAMOffsetForMCU(void);
+PM_Result MHal_PM_CopyBin2Sram(u32 u32SrcAddr);
+void MHal_PM_SetDram2Register(u32 u32DramAddr);
+
+//Luke add new function for Maxim
+void MHal_PM_RunTimePM_Disable_PassWord(void);
+void SerPrintf(char *fmt, ...);
+
+#endif // _HAL_PM_H_

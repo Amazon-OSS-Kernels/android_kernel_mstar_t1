@@ -1,0 +1,69 @@
+menu "Amazon"
+
+config AMAZON
+	bool "Amazon Drivers"
+
+	default N
+	---help---
+	  Enable support for various drivers needed on the Amazon Fire OS platform
+
+if AMAZON
+
+config AMAZON_KLOG_CONSOLE
+	bool "Amazon Kernel Log Console"
+	depends on ANDROID_LOGGER
+	default N
+	---help---
+	  provide the kernel log console which will rewrite the kernel message to Android Logger buffer.
+
+config AMAZON_SIGN_OF_LIFE
+	bool "Amazon Sign of Life"
+	default N
+	---help---
+          enable the life cycle metrics to log device boot and shutdown
+          information. this is a generic driver and can be ported to
+          other devices.  the real implementation will be done in another
+          file.
+
+config AMAZON_SIGN_OF_LIFE_MSTAR
+	bool "Amazon Sign of Life MStar platform implementation"
+	default N
+	---help---
+          enable the life cycle metrics to log device boot and shutdown information on MStar Platform.
+
+config AMAZON_PLATFORM_BT_RFKILL
+	bool "Amazon Platform BT rfkill"
+	depends on BRCM_BT
+	default y
+	---help---
+          provide bluetooth rfkill platform driver.
+
+config AMAZON_DISBALE_LOGD_AUDIT_LOG
+	bool "Avoid selinux log flooding in console"
+	default n
+
+
+config AMAZON_METRICS_LOG
+	bool "Amazon Metrics logger driver"
+	select RING_BUFFER
+	default n
+	---help---
+		Enable Amazon Metrics/Vitals logger driver
+
+config AMAZON_METRICS_LOG_TEST
+	tristate "Amazon Metrics logger driver test module"
+	depends on AMAZON_METRICS_LOG
+	default n
+	---help---
+		Enable Amazon Metrics/Vitals logger test module
+
+config AMAZON_SILENT_OTA_BACKLIGHT
+	bool "Amazon silent ota backlight control"
+	default n
+	---help---
+		Enable Amazon silent ota backlight control
+
+
+endif # if AMAZON
+
+endmenu

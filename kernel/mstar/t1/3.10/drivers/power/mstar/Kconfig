@@ -1,0 +1,7 @@
+
+config MSTAR_POWER
+	bool "MStar Power"
+	help
+		Implement kernel power driver.
+
+

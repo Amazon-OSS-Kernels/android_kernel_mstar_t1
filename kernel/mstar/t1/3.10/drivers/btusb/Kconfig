@@ -1,0 +1,11 @@
+menu "btusb"
+        depends on RFKILL
+
+config BTUSB
+        tristate "Broadcom Bluetooth RFKILL driver"
+        depends on RFKILL
+        default m
+        help
+          Broadcom btusb driver
+
+endmenu

@@ -1,0 +1,16 @@
+config MSTAR_IPAPOOL
+bool  "IPA POOL"
+depends on CMA
+select MSTAR_MIU
+default n
+
+help
+    MStar IPA POOL driver function
+
+config MSTAR_IPAPOOL_DELAY_FREE
+bool  "IPA POOL Delay Free"
+depends on MSTAR_IPAPOOL 
+default y
+
+help
+    Ipa pool delay free

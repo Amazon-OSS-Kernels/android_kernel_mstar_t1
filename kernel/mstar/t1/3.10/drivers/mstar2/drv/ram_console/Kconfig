@@ -1,0 +1,7 @@
+
+config MSTAR_RAM_CONSOLE
+	bool "Pstore based ram console"
+	depends on PSTORE_CONSOLE && PSTORE_RAM
+	help
+		Enable the ram console support with pstore.
+

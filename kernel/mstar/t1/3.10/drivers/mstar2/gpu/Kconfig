@@ -1,0 +1,80 @@
+menu "GPU"
+
+choice
+    prompt "Platform"
+    default MALI_PROJECT_PLATFORM_NONE
+config MALI_PROJECT_PLATFORM_NONE
+    bool "None"
+#config MALI_PROJECT_PLATFORM_SUPERNOVA
+#    bool "Supernova"
+#    depends on MSTAR_XXX
+config MALI_PROJECT_PLATFORM_ANDROID_LOLLIPOPMR1_64
+    bool "Android Lollipop MR1 (64-bit)"
+    depends on MSTAR_MASERATI
+    depends on SYNC
+config MALI_PROJECT_PLATFORM_ANDROID_NOUGAT_64
+    bool "Android Nougat (64-bit)"
+    depends on MSTAR_MAXIM
+    depends on SYNC
+endchoice
+
+choice
+    prompt "GPU Architecture"
+    depends on !MALI_PROJECT_PLATFORM_NONE
+    #default GPU_ARCH_MALI_UTGARD if MSTAR_XXX
+    default GPU_ARCH_MALI_MIDGARD if MSTAR_MASERATI
+    default GPU_ARCH_MALI_MIDGARD if MSTAR_MAXIM
+    default GPU_ARCH_NONE
+config GPU_ARCH_NONE
+    bool "None"
+    depends on MALI_PROJECT_PLATFORM_NONE
+#config GPU_ARCH_MALI_UTGARD
+#    bool "Mali Utgard"
+#    depends on MSTAR_XXX
+config GPU_ARCH_MALI_MIDGARD
+    bool "Mali Midgard"
+    depends on MSTAR_MASERATI
+config GPU_ARCH_MALI_MIDGARD
+    bool "Mali Midgard"
+    depends on MSTAR_MAXIM
+endchoice
+
+choice
+    prompt "Driver Version"
+    depends on !MALI_PROJECT_PLATFORM_NONE
+    #default MALI_UTGARD_RxPy_00REL0 if MSTAR_XXX
+    default MALI_MIDGARD_R10P0_00REL0 if MSTAR_MASERATI
+    default MALI_MIDGARD_R14P0_01REL0 if MSTAR_MAXIM
+#config MALI_UTGARD_RxPy_00REL0
+#    bool "Mali Utgard rxpy-00rel0"
+#    depends on MSTAR_XXX
+config MALI_MIDGARD_R10P0_00REL0
+    bool "Mali Midgard r10p0-00rel0"
+    depends on MSTAR_MASERATI
+config MALI_MIDGARD_R14P0_01REL0
+    bool "Mali Midgard r14p0-01rel0"
+    depends on MSTAR_MAXIM
+endchoice
+
+config MALI_DRIVER_VERSION
+    string
+    default "rxpy-00rel0" if MALI_UTGARD_RxPy_00REL0
+    default "r10p0-00rel0" if MALI_MIDGARD_R10P0_00REL0
+    default "r14p0-01rel0" if MALI_MIDGARD_R14P0_01REL0
+    default "error"
+
+config MALI_PROJECT_PLATFORM
+    string
+    #default "supernova" if MALI_PROJECT_PLATFORM_SUPERNOVA
+    default "android-lmr1-64" if MALI_PROJECT_PLATFORM_ANDROID_LOLLIPOPMR1_64
+    default "android-nougat-64" if MALI_PROJECT_PLATFORM_ANDROID_NOUGAT_64
+    default "error"
+
+config MALI_VERSION_PATH
+    string
+    option env="MALI_VERSION_PATH"
+source "drivers/mstar2/gpu/mali-midgard/$MALI_VERSION_PATH/drivers/gpu/arm/Kconfig"
+source "drivers/mstar2/gpu/mali-midgard/$MALI_VERSION_PATH/drivers/base/kds/Kconfig"
+source "drivers/mstar2/gpu/mali-midgard/$MALI_VERSION_PATH/drivers/base/ump/Kconfig"
+
+endmenu
