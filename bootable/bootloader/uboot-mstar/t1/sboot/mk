@@ -1,0 +1,22 @@
+#!/bin/bash
+
+################################################################################
+#
+#  mk
+#
+#  Copyright (c) 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+################################################################################
+
+# Configuration file for the build.
+CONFIG_FILE="${PWD}/mk_config"
+source "${CONFIG_FILE}"
+
+MBOOT_DEFCONFIG_DDR3="configs/maxim/.config.maxim.android.110b_23p5.rom_emmc.64bit.optee.kernel"
+MBOOT_OUT="out/obj/MBOOT_OBJ"
+TOOLSCHAINPATH="${CROSS_COMPILER_PATH}/bin"
+
+mkdir -p "${MBOOT_OUT}"
+cp "${MBOOT_DEFCONFIG_DDR3}" ".config"
+yes "" | PATH="${PATH}:${TOOLSCHAINPATH}" make -j1 -C . O="${PWD}/${MBOOT_OUT}" oldconfig
+PATH="${PATH}:${TOOLSCHAINPATH}" make UFBL_PROJECT=$1 -j1 -C . PRODUCT_OUT="${PWD}/out" O="${PWD}/${MBOOT_OUT}" BOARD_TYPE="CID00_DDR3" OUT="${PWD}/out" TOOLSCHAINPATH="${TOOLSCHAINPATH}"

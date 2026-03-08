@@ -1,0 +1,71 @@
+####################################################################
+#######                   Makefile.keybank                   #######
+####################################################################
+# include mboot.mk
+
+#	Customer Key Bank  struct{
+#		SUB_SECURE_INFO customerKeyBank;
+#  		U8 u8RSABootPublicKey[260];
+#  		U8 u8RSAUpgradePublicKey[260];
+#  		U8 u8RSAImagePublicKey[260];
+#  		U8 u8AESBootKey[16];
+#  		U8 u8AESUpgradeKey[16];
+#  		U8 u8MagicID[16];
+#  		U8 checkSum[4];
+#   }
+$(SECURITY_BIN):
+	$(Q)cat $(RSA_BOOT_PUBLIC_KEY_BIN) > $(O)/tempKeyBank;
+ifeq ($(CONFIG_REAL_KEY),y)
+	$(Q)echo "make keybank with real key"
+	$(Q)$(TOOL_PATH)/grid.sh $(TOOL_PATH)/keybank.sh $(PROJDIR)/tempKeyBank $(PROJECT)
+	$(Q)cat $(MAGIC_ID) >> tempKeyBank;
+	$(Q)$(SECUREDIR)/crc -a tempKeyBank;
+	$(Q)$(TOOL_PATH)/grid.sh $(TOOL_PATH)/SubSecureInfoGen_boot.sh $(PROJDIR)/tempKeyBank.signature.bin $(PROJDIR)/tempKeyBank 1 $(PROJECT) $(PROJDIR)/secure 0 8 0 $(BLOCK_SIZE) 0;
+else
+	$(Q)cat $(RSA_UPGRADE_PUBLIC_KEY_BIN) >> $(O)/tempKeyBank;
+	$(Q)cat $(RSA_IMAGE_PUBLIC_KEY_BIN) >> $(O)/tempKeyBank;
+ifeq ($(CONFIG_ENCRYPT_AESBOOT_KEY),y)
+	$(Q)./AESboot.sh $(AES_BOOT_KEY) >> $(O)/tempKeyBank;
+else
+	$(Q)cat $(AES_BOOT_KEY) >> $(O)/tempKeyBank;
+endif
+
+	$(Q)cat $(AES_UPGRADE_KEY) >> $(O)/tempKeyBank;
+	$(Q)cat $(MAGIC_ID) >> $(O)/tempKeyBank;
+	$(Q)$(SECUREDIR)/crc -a $(O)/tempKeyBank;
+	$(Q)$(SECUREDIR)/SubSecureInfoGen.exe $(O)/tempKeyBank.signature.bin $(O)/tempKeyBank $(RSA_BOOT_PRIVATE_KEY) $(RSA_BOOT_PUBLIC_KEY) 0  8 0 $(BLOCK_SIZE) 0 $(SECUREDIR);
+endif
+	$(Q)cat $(O)/tempKeyBank >> $(O)/tempKeyBank.signature.bin;
+# generate bakcup for CustomerKeyBank
+	$(TOOLDIR)/align $(O)/tempKeyBank.signature.bin $(CUS_KEYBANK_LEN);
+	$(Q)cp $(O)/tempKeyBank.signature.bin $(O)/_tempKeyBank.signature.bin;
+	$(Q)cat $(O)/tempKeyBank.signature.bin >> $(O)/_tempKeyBank.signature.bin;
+ifeq ($(CONFIG_MSTAR_NS_UBOOT), y)
+# generate TEE keybank
+	$(Q)echo "generate TEE keybank"
+	$(Q)cp $(TEE_MSID) $(O)/tempKeyBank
+	$(Q)cat $(TEE_RSA_PUBLIC_KEY_BIN) >> $(O)/tempKeyBank
+	$(Q)cat $(TEE_AES_KEY) >> $(O)/tempKeyBank
+	$(Q)$(SECUREDIR)/SubSecureInfoGen.exe $(O)/tempKeyBank.signature.bin $(O)/tempKeyBank $(RSA_BOOT_PRIVATE_KEY) $(RSA_BOOT_PUBLIC_KEY) 0  8 0 $(BLOCK_SIZE) 0 $(SECUREDIR);
+	$(Q)cat $(O)/tempKeyBank >> $(O)/tempKeyBank.signature.bin;
+	$(TOOLDIR)/align $(O)/tempKeyBank.signature.bin $(CUS_KEYBANK_LEN);
+	$(Q)cp $(O)/tempKeyBank.signature.bin $(O)/tempKeyBank.signature.bin.org
+	$(Q)$(SECUREDIR)/aescrypt2.exe 0 $(O)/tempKeyBank.signature.bin.org $(O)/tempKeyBank.signature.bin $(AES_BOOT_KEY)
+	$(Q)cat $(O)/tempKeyBank.signature.bin >> $(O)/_tempKeyBank.signature.bin;
+	$(TOOLDIR)/align $(O)/_tempKeyBank.signature.bin $(CUS_KEYBANK_LEN);
+ifeq ($(CONFIG_TEE_LOADER), y)
+# generate REE keybank
+	$(Q)cp $(REE_RSA_PUBLIC_KEY_BIN) $(O)/tempKeyBank;
+	$(Q)cat $(REE_AES_KEY) >> $(O)/tempKeyBank;
+	$(Q)$(SECUREDIR)/SubSecureInfoGen.exe $(O)/tempKeyBank.signature.bin $(O)/tempKeyBank $(EMBEDDED_REE_RSA_PRIVATE_KEY) $(EMBEDDED_REE_RSA_PUBLIC_KEY) 0  8 0 $(BLOCK_SIZE) 0 $(SECUREDIR);
+	$(Q)cat $(O)/tempKeyBank >> $(O)/tempKeyBank.signature.bin;
+	$(TOOLDIR)/align $(O)/tempKeyBank.signature.bin $(CUS_KEYBANK_LEN);
+	$(Q)cp $(O)/tempKeyBank.signature.bin $(O)/tempKeyBank.signature.bin.org
+	$(Q)$(SECUREDIR)/aescrypt2.exe 0 $(O)/tempKeyBank.signature.bin.org $(O)/tempKeyBank.signature.bin $(EMBEDDED_REE_AESKEY)
+	$(Q)cat $(O)/tempKeyBank.signature.bin >> $(O)/_tempKeyBank.signature.bin;
+	$(TOOLDIR)/align $(O)/_tempKeyBank.signature.bin $(CUS_KEYBANK_LEN);
+endif
+endif
+	$(TOOLDIR)/align $(O)/_tempKeyBank.signature.bin $(MBOOT_ALIGNMENT_SIZE);
+	$(Q)cat $(O)/_tempKeyBank.signature.bin >> $@;
+	$(Q)rm $(O)/_tempKeyBank.signature.bin;

@@ -1,0 +1,1 @@
+HAL_TMP_OBJ = 

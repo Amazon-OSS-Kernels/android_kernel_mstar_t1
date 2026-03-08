@@ -1,0 +1,322 @@
+################################################################################
+#
+# Copyright (c) 2006 - 2018 MStar Semiconductor, Inc.
+# This program is free software. You can redistribute it and/or modify it under the terms of
+# the GNU General Public License as published by the Free Software Foundation;
+# either version 2 of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with this program;
+# if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
+# MA 02111-1307, USA.
+#
+################################################################################
+#
+
+unexport HAL_DIR
+unexport DRV_SUB
+unexport DRV_NAME
+unexport DRV_SRC
+unexport DRV_CC_INCS
+
+
+# **********************************************
+# DRV Name
+# **********************************************
+#DRV_NAME = ddd
+#DRV_SUB = \
+#            sss
+
+# **********************************************
+# HAL Source Files
+# **********************************************
+#HAL_DIR = \
+#            hhh		                                             \
+
+
+# **********************************************
+# Rules
+# **********************************************
+# if API_NAME is defined the driver will be built into API library
+# else driver will be built in single driver library
+ifneq ($(API_NAME), )
+LIB_NAME = api$(API_NAME)
+else
+LIB_NAME = drv$(DRV_NAME)
+endif
+
+ifeq ($(API_NAME),AUDIO)
+DRV_OTH_OBJ  = $(OBJ_PATH)/drvAudio_Common.o
+DRV_OTH_OBJ += $(OBJ_PATH)/halAUDSP.o
+endif
+
+MVD_SUPPORT_EX = maxim k6 k6lite
+HVD_SUPPORT_EX = maxim k6 k6lite
+
+ifeq ($(API_NAME),VDEC)
+ifeq ($(DRV_NAME),MVD)
+ifeq ($(CHIP), $(filter $(CHIP),$(MVD_SUPPORT_EX)))
+DRV_OTH_OBJ = $(OBJ_PATH)/MVD_EX_Common.o
+else
+DRV_OTH_OBJ = $(OBJ_PATH)/MVD_Common.o
+endif
+endif
+ifeq ($(DRV_NAME),HVD)
+ifeq ($(CHIP), $(filter $(CHIP),$(HVD_SUPPORT_EX)))
+DRV_OTH_OBJ = $(OBJ_PATH)/HVD_EX_Common.o
+else
+DRV_OTH_OBJ = $(OBJ_PATH)/HVD_Common.o
+endif
+endif
+endif
+
+ifeq ($(API_NAME),HDMITX)
+DRV_OTH_OBJ = $(OBJ_PATH)/halHDCPTx.o
+endif
+
+DRV_SRC     = $(wildcard $(CURDIR)/*.c)
+DRV_SRC    += $(foreach dir, $(DRV_SUB), $(wildcard $(CURDIR)/$(dir)/*.c))
+ifeq ($(strip $(DRV_SRC)),)
+-include $(CURDIR)/drv.mk
+DRV_OBJ     = $(foreach file, $(notdir $(DRV_TMP_OBJ)), $(OBJ_PATH)/$(file))
+else
+DRV_OBJ     = $(foreach file, $(notdir $(patsubst %.c, %.o, $(DRV_SRC))), $(OBJ_PATH)/$(file))
+endif
+DRV_IMPORT_SRC = $(foreach dir, $(CURDIR), $(wildcard $(CURDIR)/obj_import/$(OS_TYPE)/$(MCU_TYPE)/*.src))
+DRV_IMPORT_OBJ = $(foreach file, $(notdir $(patsubst %.src, %.o, $(DRV_IMPORT_SRC))), $(OBJ_PATH)/$(file))
+HAL_SRC     = $(foreach dir, $(HAL_DIR), $(wildcard $(DDIHAL)/$(CHIP)/$(dir)/*.c))
+HAL_SRC_S   = $(foreach dir, $(HAL_DIR), $(wildcard $(DDIHAL)/$(CHIP)/$(dir)/*.s))
+ifeq ($(strip $(HAL_SRC)),)
+-include $(CURDIR)/hal.mk
+HAL_OBJ     = $(foreach file, $(notdir $(HAL_TMP_OBJ)), $(OBJ_PATH)/$(file))
+else
+HAL_OBJ     = $(foreach file, $(notdir $(patsubst %.c, %.o, $(HAL_SRC))), $(OBJ_PATH)/$(file))
+endif
+HAL_OBJ_S   = $(foreach file, $(notdir $(patsubst %.s, %.o, $(HAL_SRC_S))), $(OBJ_PATH)/$(file))
+HAL_IMPORT_SRC = $(foreach dir, $(HAL_DIR), $(wildcard $(DDIHAL)/$(CHIP)/$(dir)/obj_import/$(OS_TYPE)/$(MCU_TYPE)/*.src))
+HAL_IMPORT_OBJ = $(foreach file, $(notdir $(patsubst %.src, %.o, $(HAL_IMPORT_SRC))), $(OBJ_PATH)/$(file))
+DRV_INCDIR  = $(CURDIR) $(foreach dir,$(DRV_SUB),$(CURDIR)/$(dir)) $(foreach dir,$(HAL_DIR),$(DDIHAL)/$(CHIP)/$(dir))
+DRV_CC_INCS = $(foreach dir,$(DRV_INCDIR),-I$(dir) -I$(PUBINC))
+
+ifeq ($(DRV_NAME), SYS)
+ifeq ($(CONFIG_CLOSE_SRC_DRV), y)
+CLOSE_HAL_OBJ = $(foreach dir, $(CLOSE_SRC_PATH)/sys, $(wildcard $(dir)/*.o))
+#HAL_OBJ += $(CLOSE_HAL_OBJ)
+endif
+endif
+
+ifeq ($(MAKE_TYPE),lint)
+ifeq ($(shell uname -o),Cygwin)
+LINT_INC   += $(foreach dir,$(shell cygpath -m $(DRV_INCDIR)),-i"$(dir)")
+else
+LINT_INC   += $(foreach dir,$(DRV_INCDIR),-i"$(dir)")
+endif
+endif
+
+HAL_OBJ_T = $(HAL_OBJ:.o=.T)
+HAL_IMPORT_OBJ_T = $(HAL_IMPORT_OBJ:.o=.T)
+DRV_OBJ_T = $(DRV_OBJ:.o=.T)
+DRV_OBJ_T += $(DRV_OTH_OBJ:.o=.T)
+DRV_IMPORT_OBJ_T = $(DRV_IMPORT_OBJ:.o=.T)
+
+VPATH = $(DRV_SUB) $(foreach dir, $(HAL_DIR), $(DDIHAL)/$(CHIP)/$(dir))
+
+ifeq ("$(UTOPIA_BSP_VERSION)", "")
+UTOPIA_BSP_VERSION = 000000
+else
+CC_DEFS += -DUTOPIA_BSP_VERSION=$(UTOPIA_BSP_VERSION)
+endif
+
+ifeq ("$(P4PORT)", "")
+SW_VERSION_HAL_$(DRV_NAME) = 0
+else
+HAL_SW_DIR = $(shell echo $(HAL_DIR) | sed 's/ vpu//g')
+SW_VERSION_HAL_$(DRV_NAME) = $(shell p4 changes -m1 ./../../hal/$(CHIP)/$(HAL_SW_DIR)/...\#have | egrep Change | awk '{print $$2}')
+ifeq ("$(SW_VERSION_HAL_$(DRV_NAME))", "")
+SW_VERSION_HAL_$(DRV_NAME) = 0
+endif
+endif
+CC_DEFS += -DSW_VERSION_HAL_$(DRV_NAME)=$(SW_VERSION_HAL_$(DRV_NAME))
+
+ifeq ("$(P4PORT)", "")
+SW_VERSION_DRV_$(DRV_NAME) = 0
+else
+SW_VERSION_DRV_$(DRV_NAME) = $(shell p4 changes -m1 "./...\#have" | egrep Change | awk '{print $$2}')
+ifeq ("$(SW_VERSION_DRV_$(DRV_NAME))", "")
+SW_VERSION_DRV_$(DRV_NAME) = 0
+endif
+endif
+CC_DEFS += -DSW_VERSION_DRV_$(DRV_NAME)=$(SW_VERSION_DRV_$(DRV_NAME))
+
+ifeq ("$(HAL_DIR)", "demod")
+CC_DEFS += -D$(CHIP)
+endif
+
+all : $(DRV_OBJ) $(DRV_IMPORT_OBJ) $(HAL_OBJ_S) $(HAL_OBJ) $(HAL_IMPORT_OBJ) $(HAL_OBJ_T) $(HAL_IMPORT_OBJ_T) $(DRV_OBJ_T) $(DRV_IMPORT_OBJ_T)
+
+	@echo "DRV_TMP_OBJ = "$(DRV_OBJ) > $(CURDIR)/drv.mk
+	@echo "HAL_TMP_OBJ = "$(HAL_OBJ) > $(CURDIR)/hal.mk
+ifeq ($(LINK_TYPE),dynamic)
+ifneq ($(API_NAME), )
+ifneq ($(DRV_OBJ_T), )
+ifneq ($(HAL_OBJ_T), )
+	cp $(OBJ_PATH)/*.T $(OBJ_PATH)/temp
+endif
+endif
+endif
+endif
+
+ifneq ($(MAKE_TYPE),lint)
+ifeq ($(LINK_TYPE),dynamic)
+ifneq ($(BUILDING_API),1)
+    ifeq ($(CONFIG_INCREMENTAL_BUILD),y)
+	@$(CC) $(CFG_CC_OPTS) $(LD_LIBS_INC) $(LD_OPTS) $(DRV_OBJ) $(DRV_OTH_OBJ) $(DRV_IMPORT_OBJ) $(HAL_OBJ_S) $(HAL_OBJ) $(HAL_IMPORT_OBJ) $(MLOG_LIB_PATH) -s -o $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+    ifeq ($(CONFIG_VERSION_INFO_EMBADE), y)
+	@sh $(VERSION)/versionembadder.sh $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT) $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT).temp ./version_info 
+	@rm -f $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+	@mv -f $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT).temp $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+    endif
+    else
+	@$(CC) $(CFG_CC_OPTS) $(LD_OPTS) $(DRV_OBJ) $(DRV_IMPORT_OBJ) $(HAL_OBJ_S) $(HAL_OBJ) $(HAL_IMPORT_OBJ) $(MLOG_LIB_PATH) -o $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+	@$(OBJCOPY) --add-section .mmodule_version=./version_info $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+    ifeq ($(CONFIG_VERSION_INFO_EMBADE), y)
+	@sh $(VERSION)/versionembadder.sh $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT) $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT).temp ./version_info 
+	@rm -f $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+	@mv -f $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT).temp $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+    endif
+    endif
+endif
+else
+	@$(AR) cru $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT) $(DRV_OBJ) $(DRV_OTH_OBJ) $(DRV_IMPORT_OBJ) $(HAL_OBJ) $(HAL_IMPORT_OBJ)
+    ifeq ($(CONFIG_VERSION_INFO_EMBADE), y)
+	@sh $(VERSION)/versionembadder.sh $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT) $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT).temp ./version_info 
+	@rm -f $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+	@mv -f $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT).temp $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+    endif
+ifeq ($(BLT_TYPE),retail)
+	@$(STRIP) -S $(DDI_PATH)/lib$(LIB_NAME).$(LIB_EXT)
+endif
+endif
+endif
+
+ifeq ($(PARA), 1)
+	@if [ -f $(CURDIR)/cpptestscan.bdf ]; then	\
+		rm -f $(CURDIR)/cpptestscan.bdf;                                             \
+	fi
+endif
+
+
+ifeq ($(TOOLCHAIN),mips-linux-gnu)
+ifeq ($(OS_TYPE),nos)
+SW_MBOOT_FLOW = TRUE
+endif
+endif
+
+
+lib : setup all
+
+$(DRV_IMPORT_OBJ) :
+	echo find drv import_obj cp from $(filter %$(notdir $*).src,$(DRV_IMPORT_SRC)) to $@
+	cp $(filter %$(notdir $*).src,$(DRV_IMPORT_SRC)) $@
+
+$(HAL_IMPORT_OBJ):
+	echo find hal import_obj cp from $(filter %$(notdir $*).src,$(HAL_IMPORT_SRC)) to $@
+	cp $(filter %$(notdir $*).src,$(HAL_IMPORT_SRC)) $@
+
+$(HAL_OBJ_S) : $(OBJ_PATH)/%.o : %.s
+	@echo [AS] $(notdir $<)
+ifeq ($(MCU_TYPE),arm_ca12)
+	$(AS) -march=armv7-a -mfpu=neon -o $@ $<;
+endif
+ifeq ($(MCU_TYPE),arm9)
+	$(AS) -march=armv7-a -mfpu=neon -o $@ $<;
+endif
+ifeq ($(MCU_TYPE),arm_ca7)
+	$(AS) -march=armv7-a -mfpu=neon -o $@ $<;
+endif
+
+
+ifneq ($(strip $(DRV_SRC)),)
+$(DRV_OBJ) : $(OBJ_PATH)/%.o : %.c
+ifneq ($(MAKE_TYPE),lint)
+	@echo [CC] $(notdir $<)
+	@$(CC) $(CC_OPTS) $(CC_DEFS) $(CC_INCS) $(DRV_CC_INCS) -o $@ $<;
+ifeq ($(PARA), 1)
+	@if [ ! -f $(CURDIR)/cpptestscan.bdf ]; then                                         \
+		echo ERROR! No $(CURDIR)/cpptestscan.bdf;                                    \
+	fi
+	@if [ -f $(CURDIR)/cpptestscan.bdf ]; then                                           \
+		cat $(CURDIR)/cpptestscan.bdf >> $(PROJ)/cpptestscan.bdf;    \
+		rm -f $(CURDIR)/cpptestscan.bdf;                                                             \
+	fi
+endif
+
+
+else
+	@echo [LINT] $(notdir $<)
+ifeq ($(shell uname -o),Cygwin)
+	@$(LINT_CMD) $(CC_DEFS) $(LINT_INC) $(shell cygpath -m $<) >>$(LINT_LOG)
+#	@echo $< >>$(LINT_FILES)
+else
+	@$(LINT_CMD) $(CC_DEFS) $(LINT_INC) $< >>$(LINT_LOG)
+#	@echo $< >>$(LINT_FILES)
+endif
+endif
+endif
+
+ifneq ($(strip $(HAL_SRC)),)
+$(HAL_OBJ) : $(OBJ_PATH)/%.o : %.c
+ifneq ($(MAKE_TYPE),lint)
+	@echo [CC] $(notdir $<)
+	@$(CC) $(CC_OPTS) $(CC_DEFS) $(CC_INCS) $(DRV_CC_INCS) -o $@ $<;
+
+else
+	@echo [LINT] $(notdir $<)
+ifeq ($(shell uname -o),Cygwin)
+	@$(LINT_CMD) $(CC_DEFS) $(LINT_INC) $(shell cygpath -m $<) >>$(LINT_LOG)
+#	@echo $< >>$(LINT_FILES)
+else
+	@$(LINT_CMD) $(CC_DEFS) $(LINT_INC) $< >>$(LINT_LOG)
+#	@echo $< >>$(LINT_FILES)
+endif
+endif
+endif
+
+$(HAL_OBJ_T) $(HAL_IMPORT_OBJ_T) $(DRV_OBJ_T) $(DRV_IMPORT_OBJ_T):
+ifeq ($(BUILDING_API),1)
+	cp $(@:.T=.o) $@;
+endif
+
+
+setup:
+ifeq ($(LINK_TYPE),dynamic)
+	@echo [drv_rule.mk][lib$(LIB_NAME).$(LIB_EXT)]
+else
+	@echo [drv_rule.mk][lib$(LIB_NAME).$(LIB_EXT)]
+endif
+ifeq ($(DRV_NAME), SYS)
+ifeq ($(CONFIG_CLOSE_SRC_DRV), y)
+	@cp $(CLOSE_HAL_OBJ) $(OBJ_PATH)
+#HAL_OBJ += $(foreach dir, $(OBJ_PATH)/temp, $(wildcard $(dir)/*.o))
+HAL_OBJ += $(OBJ_PATH)/halSYS.o
+endif
+endif
+
+clean :
+	@rm -f $(HAL_OBJ_S)
+ifneq ($(strip $(HAL_SRC)),)
+	@rm -f $(HAL_OBJ)
+endif
+	@rm -f $(HAL_IMPORT_OBJ)
+ifneq ($(strip $(DRV_SRC)),)
+	@rm -f $(DRV_OBJ)
+endif
+	@rm -f $(DRV_IMPORT_OBJ)
+	@rm -f $(DDI_PATH)/lib$(LIB_NAME).a
+	@rm -f $(DDI_PATH)/lib$(LIB_NAME).so
+
+
+
