@@ -701,10 +701,11 @@ static int CMA_Pool_Init(unsigned int heap_id, unsigned long flags, unsigned int
         if(((flags &CMA_FLAG_MAP_KERNEL) && (TYPE_STATES_USER  == proc_info->type_states))
         ||((! (flags &CMA_FLAG_MAP_KERNEL)) && (TYPE_STATES_KERNEL == proc_info->type_states)))
         {
-            printk(CMA_ERR "\033[35mFunction = %s, Line = %d, already having proc_info, but want to use simultaneously in kernel mode and user mode,flags=%lu   ,proc_info->type_states=%d\033[m\n", __PRETTY_FUNCTION__, __LINE__,flags,proc_info->type_states);
-            MCMA_BUG_ON(1);
+		printk(KERN_EMERG "\033[35mFunction = %s, Line = %d, already having proc_info, but want to use simultaneously in kernel mode and user mode,flags=%lu   ,proc_info->type_states=%d\033[m\n", __PRETTY_FUNCTION__, __LINE__, flags, proc_info->type_states);
+		ret = -EEXIST;
+		return ret;
         }
-		#endif        
+#endif
     }
 
     heap_info = find_heap_info(heap_id);	// heap_info will be created here for only once, never be cleared
