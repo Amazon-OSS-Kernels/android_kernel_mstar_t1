@@ -39,9 +39,7 @@
 #include <linux/leds.h>
 #include <linux/sign_of_life.h>
 
-#if defined(CONFIG_AMAZON_METRICS_LOG)
 #include <linux/metricslog.h>
-#endif
 
 static struct mutex lock;
 
@@ -108,7 +106,7 @@ static DEFINE_SPINLOCK(spinlock_ld);
 static struct file *mbx_fp;
 static MS_BOOL bReceived;
 
-#if defined(CONFIG_AMAZON_METRICS_LOG)
+#if defined(CONFIG_AMAZON_METRICS_LOG) || defined(CONFIG_AMAZON_MINERVA_METRICS_LOG)
 
 struct metrics_info {
 	int flags;
@@ -119,20 +117,27 @@ struct metrics_info {
 static struct metrics_info info;
 
 
-static void bq_log_metrics(char *msg,
-	char *metricsmsg)
+static void bq_log_metrics(char *metricsmsg)
 {
 	char buf[512];
+
 	struct timespec curr = current_kernel_time();
 	/* Compute elapsed time and determine screen off or on drainage */
 	struct timespec diff = timespec_sub(curr,
 			info.suspend_time);
 
+#ifdef CONFIG_AMAZON_MINERVA_METRICS_LOG
 	snprintf(buf, sizeof(buf),
-		"%s:def:value=0;CT;1,elapsed=%ld;TI;1:NR",
-		metricsmsg,
-		diff.tv_sec * 1000 + diff.tv_nsec / NSEC_PER_MSEC);
+		"%s:%s:100:%s:def:value=0;IN;1,elapsed=%ld;TI;1:NR",
+		KERNEL_METRICS_GROUP_ID, KERNEL_METRICS_SCREEN_DRAIN_SCHEMA_ID,
+		metricsmsg, diff.tv_sec * 1000 + diff.tv_nsec / NSEC_PER_MSEC);
 	log_to_metrics(ANDROID_LOG_INFO, "drain_metrics", buf);
+#elif defined(CONFIG_AMAZON_METRICS_LOG)
+	snprintf(buf, sizeof(buf),
+		"%s:def:value=0;IN;1,elapsed=%ld;TI;1:NR",
+		metricsmsg, diff.tv_sec * 1000 + diff.tv_nsec / NSEC_PER_MSEC);
+	log_to_metrics(ANDROID_LOG_INFO, "drain_metrics", buf);
+#endif
 	/* Mark the suspend or resume time */
 	info.suspend_time = curr;
 }
@@ -454,13 +459,13 @@ static ssize_t dummy_light_set(struct device *dev, struct device_attribute *attr
 	switch (action) {
 	case 0:
 		mstar_set_screen_flag();
-		pr_info("backlight is off \n");
-		bq_log_metrics("Screen on drainage", "screen_on_drain");
+		pr_info("backlight is off\n");
+		bq_log_metrics("screen_on_drain");
 		break;
 	case 1:
 		mstar_clear_screen_flag();
 		pr_info("backlight is on\n");
-		bq_log_metrics("Screen off drainage", "screen_off_drain");
+		bq_log_metrics("screen_off_drain");
 		break;
 	default:
 		break;

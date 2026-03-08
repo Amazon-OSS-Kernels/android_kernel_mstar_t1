@@ -70,6 +70,7 @@ static int lowmem_adj_size = 4;
 /*static*/ int lowmem_minfree_size = 4;
 
 static unsigned long lowmem_deathpending_timeout;
+static pid_t lowmem_deathpending_tgid;
 
 /* ACOS_MOD_BEGIN {fwk_crash_log_collection} */
 /* Declarations */
@@ -278,8 +279,13 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		if (tsk->flags & PF_KTHREAD)
 			continue;
 
-		if (test_tsk_thread_flag(tsk, TIF_MEMDIE) &&
+		p = find_lock_task_mm(tsk);
+		if (!p)
+			continue;
+
+		if ((test_tsk_thread_flag(p, TIF_MEMDIE) || (lowmem_deathpending_tgid == task_tgid_nr(p))) &&
 		    time_before_eq(jiffies, lowmem_deathpending_timeout)) {
+			task_unlock(p);
 			rcu_read_unlock();
 #ifdef CONFIG_MP_DEBUG_TOOL_MEMORY_USAGE_MONITOR
 			atomic_add((jiffies-time_start), &time_cnt_table[7].lone_time);
@@ -287,10 +293,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 #endif
 			return 0;
 		}
-
-		p = find_lock_task_mm(tsk);
-		if (!p)
-			continue;
 
 		oom_score_adj = p->signal->oom_score_adj;
 		if (oom_score_adj < min_score_adj) {
@@ -357,6 +359,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	/* ACOS_MOD_END {fwk_crash_log_collection} */
 
 	if (selected) {
+		lowmem_deathpending_tgid = task_tgid_nr(selected);
 		lowmem_print(1, "Killing '%s' (%d), adj %hd,\n" \
 				"   to free %ldkB on behalf of '%s' (%d) because\n" \
 				"   cache %ldkB is below limit %ldkB for oom_score_adj %hd\n" \

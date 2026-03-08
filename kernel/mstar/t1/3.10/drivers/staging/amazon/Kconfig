@@ -50,6 +50,16 @@ config AMAZON_METRICS_LOG
 	---help---
 		Enable Amazon Metrics/Vitals logger driver
 
+config AMAZON_MINERVA_METRICS_LOG
+	bool "Amazon Minerva Metrics logger"
+	select RING_BUFFER
+	default n
+	---help---
+	  Enable Amazon Minerva Metrics and sent metrics
+	  through logger to vitals buffer. Both AMAZON_METRICS_LOG and
+	  and AMAZON_MINERVA_METRICS_LOG can be defined but only MINERVA
+ 	  metrics are support in the future.
+
 config AMAZON_METRICS_LOG_TEST
 	tristate "Amazon Metrics logger driver test module"
 	depends on AMAZON_METRICS_LOG

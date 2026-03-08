@@ -16,13 +16,10 @@
 #include <linux/debugfs.h>
 #include <linux/types.h>
 #include <trace/events/power.h>
-
 #include "power.h"
-#if defined(CONFIG_AMAZON_METRICS_LOG)
 #include <linux/metricslog.h>
-#endif
 
-#ifdef CONFIG_AMAZON_METRICS_LOG
+#if defined(CONFIG_AMAZON_METRICS_LOG) || defined(CONFIG_AMAZON_MINERVA_METRICS_LOG)
 static struct work_struct metrics_work_offmode;
 static char metrics_buf_offmode[128];
 static void wokeup_metrics_offmode(struct work_struct *work)
@@ -967,12 +964,22 @@ static int print_wakeup_source_stats(struct seq_file *m,
 			ktime_to_ms(prevent_sleep_time));
 
 	spin_unlock_irqrestore(&ws->lock, flags);
+#if defined(CONFIG_AMAZON_MINERVA_METRICS_LOG)
+	if (ktime_to_ms(active_time) != 0) {
+		snprintf(metrics_buf_offmode, sizeof(metrics_buf_offmode),
+			 "%s:%s:100:system_suspend:def:suspfail=1;CT;1,name=%s;DV;1,for_ms=%lld;CT;1:NR",
+			 KERNEL_METRICS_GROUP_ID, KERNEL_POWER_SUSPEND_STATE_SCHEMA_ID,
+			 ws->name, ktime_to_ms(active_time));
 
-#if defined(CONFIG_AMAZON_METRICS_LOG)
+		schedule_work(&metrics_work_offmode);
+	}
+
+#elif defined(CONFIG_AMAZON_METRICS_LOG)
 	if (ktime_to_ms(active_time) != 0) {
 		snprintf(metrics_buf_offmode, sizeof(metrics_buf_offmode),
 			 "system_suspend:def:suspfail=1;CT;1,name=%s;DV;1,for_ms=%lld;CT;1:NR",
 			 ws->name, ktime_to_ms(active_time));
+
 		schedule_work(&metrics_work_offmode);
 	}
 #endif
