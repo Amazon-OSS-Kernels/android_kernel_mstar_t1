@@ -840,7 +840,7 @@ int cpu_release(int nr, int argc, char * const argv[]);
 #define HW_ID_GPIO3      BALL_AD22 //118
 
 #define ID_KEIRA         15
-#define ID_abc123         10
+#define ID_JOYCE         10
 
 int amzn_get_hardware_id();
 int amzn_check_model_name();
