@@ -874,7 +874,7 @@ void disassociate_ctty(int on_exit)
 	spin_lock_irq(&current->sighand->siglock);
 	put_pid(current->signal->tty_old_pgrp);
 	current->signal->tty_old_pgrp = NULL;
-	tty = get_current_tty();
+	tty = tty_kref_get(current->signal->tty);
 	spin_unlock_irq(&current->sighand->siglock);
 
 	if (tty) {
