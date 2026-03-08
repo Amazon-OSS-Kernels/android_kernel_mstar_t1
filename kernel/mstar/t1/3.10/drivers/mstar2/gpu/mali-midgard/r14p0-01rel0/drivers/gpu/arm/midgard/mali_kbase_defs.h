@@ -1458,7 +1458,6 @@ struct kbase_context {
 	 * Mutable flags *must* be accessed under jctx.sched_info.ctx.jsctx_mutex
 	 *
 	 * All other flags must be added there */
-	spinlock_t         mm_update_lock;
 	struct mm_struct *process_mm;
 	/* End of the SAME_VA zone */
 	u64 same_va_end;

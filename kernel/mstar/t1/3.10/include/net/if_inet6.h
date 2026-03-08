@@ -54,6 +54,7 @@ struct inet6_ifaddr {
 	__u8			flags;
 
 	__u16			scope;
+	__u64			dad_nonce;
 
 	unsigned long		cstamp;	/* created timestamp */
 	unsigned long		tstamp; /* updated timestamp */

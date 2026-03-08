@@ -1274,6 +1274,16 @@ static int kbase_open(struct inode *inode, struct file *filp)
 	filp->private_data = kctx;
 	kctx->filp = filp;
 
+	/* Check if this is a Userspace created context */
+	if (likely(kctx->filp)) {
+	/* This merely takes a reference on the mm_struct and not on the
+	 * address space and so won't block the freeing of address space
+	 * on process exit.
+	*/
+		atomic_inc(&current->mm->mm_count);
+		kctx->process_mm = current->mm;
+	}
+
 	if (kbdev->infinite_cache_active_default)
 		kbase_ctx_flag_set(kctx, KCTX_INFINITE_CACHE);
 
