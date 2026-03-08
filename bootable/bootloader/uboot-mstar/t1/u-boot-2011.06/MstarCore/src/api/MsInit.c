@@ -1,0 +1,367 @@
+/**
+* Copyright (c) 2006 – 2016 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of
+* the GNU General Public License as published by the Free Software Foundation;
+* either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program;
+* if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
+* MA 02111-1307, USA.
+*/
+
+/******************************************************************************/
+/*                    Header Files                                            */
+/* ****************************************************************************/
+#include <MsCmdTable.h>
+#include <MsCoreRegister.h>
+#include <MsCustomerRegister.h>
+
+#include <MsInit.h>
+#include <ShareType.h>
+#include <drvGPIO.h>
+#include <drvIRQ.h>
+#include <MsOS.h>
+#include <MsDevice.h>
+#include <common.h>
+#include <command.h>
+#include <drvSERFLASH.h>
+#include <drvBDMA.h>
+#include <drvSYS.h>
+#include <drvPM.h>
+#include <mmc.h>
+#include <MsDebug.h>
+#include <CusCB.h>
+#include <drvWDT.h>
+#include <miu/MsDrvMiu.h>
+#include <MsSystem.h>
+#include <mstarstr.h>
+
+#if defined (CONFIG_USB_PREINIT)
+#include <usb.h>
+#endif
+#if(ENABLE_URSA_8==1)
+#include <drvMSPI.h>
+#endif
+
+#if defined (CONFIG_USB_PREINIT)
+void init_usb(void)
+{
+    usb_preinit(0);
+#if defined(ENABLE_SECOND_EHC)
+    usb_preinit(1);
+#endif
+#if defined(ENABLE_THIRD_EHC)
+    usb_preinit(2);
+#endif
+}
+#endif
+
+
+extern int msI2C_init(void);
+extern void msKeypad_Init(void);
+extern void msIR_Initialize(U8 irclk_mhz);
+extern MS_BOOL MDrv_MMIO_GetBASE(MS_U32 *u32Baseaddr, MS_U32 *u32Basesize, MS_U32 u32Module);
+extern MS_BOOL MDrv_MMIO_Init(void);
+#ifdef STATIC_RELIABLE_TEST
+extern int do_test_reliable_write(void);
+#endif
+
+unsigned long MS_RIU_MAP;
+
+void msFlash_ActiveFlash_Set_HW_WP(BOOLEAN bEnable)
+{
+    if(bEnable)
+    {
+#if(PIN_FLASH_WP0)
+        mdrv_gpio_set_low( PIN_FLASH_WP0);
+#endif
+        udelay (500);
+    }
+    else
+    {
+#if(PIN_FLASH_WP0)
+        mdrv_gpio_set_high( PIN_FLASH_WP0);
+#endif
+        udelay (500);
+    }
+}
+#if defined(CONFIG_TIMER_TEST)
+void TimerISR(MS_U32 u32Tick)
+{
+    static unsigned int clk = 0;
+
+    if(clk!=0)
+    {
+        printf("TIME COUNT %d\n", clk);
+	}
+    clk++;
+
+    u32Tick=u32Tick;
+}
+
+void MDrv_Timer_ISR_Register(void)
+{
+    MS_U32 check_timer_status;
+    check_timer_status = MsOS_CreateTimer( (TimerCb)TimerISR,
+                                                  0,
+                                                  1000,
+                                                  TRUE,
+                                                  "Check timer");
+}
+#endif
+
+
+#if defined(__ARM__)
+
+void MstarSysInit(void)
+{
+    uint u32Tmp;
+    /*set up Mstar IRQ handler*/
+    extern void mhal_fiq_merge(void);
+    extern void MAsm_CPU_TimerStart(void);
+    extern void dcache_init(void);
+    extern void l2_cache_init(void);
+    #if ((ENABLE_MSTAR_MUJI==0) && (ENABLE_MSTAR_MONET==0))
+    mhal_fiq_merge();
+    #endif
+    MsOS_Init();
+    #if (defined(CONFIG_MSTAR_MUNICH) || defined (CONFIG_MSTAR_MACAN) )
+
+        #ifdef CONFIG_SYS_DCACHE
+        dcache_init();
+        #endif
+    flush_cache_all();
+    #else
+    flush_cache_all();
+
+        #ifdef CONFIG_SYS_DCACHE
+        dcache_init();
+        #endif
+
+    #endif
+
+#ifndef CONFIG_L2_OFF
+    l2_cache_init();
+#endif
+#if defined(CONFIG_TIMER_TEST)
+    MDrv_Timer_ISR_Register();
+#endif
+    MsOS_CPU_EnableInterrupt();
+    MAsm_CPU_TimerStart();
+
+    MDrv_MMIO_Init();
+    MDrv_MMIO_GetBASE((MS_U32 *)&MS_RIU_MAP, (MS_U32 *)&u32Tmp, MS_MODULE_PM);
+
+#ifdef CONFIG_IR
+    msIR_Initialize(12);
+#endif
+
+    MDrv_SYS_Init();
+    MDrv_WDT_Init(0);
+    MsDrv_MiuInit();
+
+#if (ENABLE_MODULE_ENV_IN_SERIAL==1)
+#if (ENABLE_MODULE_SPI == 1)
+    puts ("SPI:  ");
+    {
+        extern int spi_init (void);
+        spi_init();		/* go init the SPI */
+    }
+
+    #if (CONFIG_MSTAR_BD_MST028B_10AFX_EAGLE||CONFIG_MSTAR_BD_MST038B_10AHT_EAGLE ||CONFIG_MSTAR_BD_MST049B_10AQV_NIKE || CONFIG_MSTAR_BD_MST049B_10AQV_NIKE_U)
+    MDrv_SERFLASH_SetWPInfo(TRUE);
+    #else
+    ms_Flash_SetHWWP_CB pCB = msFlash_ActiveFlash_Set_HW_WP;
+    MDrv_SERFLASH_SetFlashWPCallBack(pCB);
+    FlashSetHWWPCB = FlashSetHWWPCB;
+    McuChipSelectCB = McuChipSelectCB;
+    #endif
+#endif
+#else
+    #if (ENABLE_MODULE_SPI==1)
+        MDrv_SERFLASH_Init();
+    #endif
+#endif
+
+#if(ENABLE_URSA_8==1)
+    MDrv_MSPI_Init_Ext(0x0);
+#endif
+    mdrv_gpio_init();
+    MDrv_BDMA_Init(CONFIG_SYS_MIU_INTERVAL);
+
+#if defined (CONFIG_USB_PREINIT)
+        init_usb();
+#endif
+    #ifndef CONFIG_MSTAR_TOOL_ROM_PROGRAM_NAND_BIN
+    run_command("init_raw_io" , 0);
+    run_command("config_raw_io" , 0);
+    #endif
+    CusCallback();
+}
+
+#else
+
+
+void MstarSysInit(void)
+{
+    uint u32Tmp;
+    extern MS_BOOL MDrv_MIU_SetIOMapBase(void);
+    extern MS_BOOL MDrv_SEM_Init(void);
+
+    MsOS_Init();
+    MDrv_MMIO_Init();
+    MDrv_MMIO_GetBASE((MS_U32 *)&MS_RIU_MAP, (MS_U32 *)&u32Tmp, MS_MODULE_PM);
+
+#ifdef CONFIG_IR
+    msIR_Initialize(12);
+#endif
+
+    MDrv_SEM_Init();
+    MDrv_MIU_SetIOMapBase();
+    MsOS_CPU_EnableInterrupt();
+    MDrv_WDT_Init(0);
+    MsDrv_MiuInit();
+	MDrv_SYS_Init();
+#if (ENABLE_MODULE_SPI == 1)
+#if (ENABLE_MODULE_ENV_IN_SERIAL==1)
+    puts ("SPI:  ");
+    {
+        extern int spi_init (void);
+        spi_init();     /* go init the SPI */
+    }
+    ms_Flash_SetHWWP_CB pCB = msFlash_ActiveFlash_Set_HW_WP;
+    MDrv_SERFLASH_SetFlashWPCallBack(pCB);
+#else
+    MDrv_SERFLASH_Init();
+#endif
+#endif
+    MDrv_BDMA_Init(CONFIG_SYS_MIU_INTERVAL);
+    mdrv_gpio_init();
+
+#if defined (CONFIG_USB_PREINIT)
+    init_usb();
+#endif
+#ifndef CONFIG_MSTAR_TOOL_ROM_PROGRAM_NAND_BIN
+    run_command("init_raw_io" , 0);
+    run_command("config_raw_io" , 0);
+#endif
+    CusCallback();
+}
+
+
+#endif
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/// @Functino Name :  MstarInit
+/// @brief         :  This function is specially for device init via function.
+/// @author        :  MStar Semiconductor Inc.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+void MstarInitByFun(void)
+{
+
+//for Customer keypad init to set in board_r
+#ifdef CONFIG_KEYPAD
+    msKeypad_Init();
+#endif
+
+#if(CONFIG_MSTARI2C == 1)
+    msI2C_init();
+#endif
+
+    char *pMiu0Size=NULL;
+    char *pMiu1Size=NULL;
+    char *pMiu2Size=NULL;
+    pMiu0Size=MsDrv_GetMIUSize(0); //miu0
+    pMiu1Size=MsDrv_GetMIUSize(1); //miu1
+    pMiu2Size=MsDrv_GetMIUSize(2); //miu2
+    if(pMiu0Size!=NULL)
+    {
+         printf("DRAM_SIZE1=%s MB \n",pMiu0Size);
+    }
+    if(pMiu0Size!=NULL)
+    {
+         printf("DRAM_SIZE2=%s MB \n",pMiu1Size);
+    }
+    if(pMiu0Size!=NULL)
+    {
+         printf("DRAM_SIZE3=%s MB \n",pMiu2Size);
+    }
+
+#if (ENABLE_MSTAR_BD_AMAZON_MARGO == 1)
+    if (is_str_resume())
+    {
+        printf("STR mode: don't reset wifi\n");
+    }
+    else
+    {
+        printf("Resetting wifi module\n");
+        // reset WIFI to make sure they all boot into correct state
+        mdrv_gpio_set_low(BALL_F7); //disable WIFI
+        MsOS_DelayTask(20);         //delay 20ms
+        mdrv_gpio_set_high(BALL_F7);//enable WIFI
+    }
+#endif
+
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/// @Functino Name :  MstarInit
+/// @brief         :  This function is specially for device init via cmd.
+/// @author        :  MStar Semiconductor Inc.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+int MstarDrvInit(void)
+{
+    int reval=0;
+#if CONFIG_MINIUBOOT
+#else
+    ST_CMD_RECORED *pCmd=NULL;
+    UBOOT_DEBUG("\n \033[0;35m ===========================================================\033[0m\n");
+    UBOOT_DEBUG("\n \033[0;35m -------------------MstarDrvInit----------------------------\033[0m\n");
+    UBOOT_DEBUG("\n \033[0;35m ===========================================================\033[0m\n");
+
+    Table_Init();
+
+    Core_Register_MsInit();
+    Customer_Register_MsInit();
+
+    pCmd=getFirstCmd();
+    if(pCmd!=NULL)
+    {
+        while(1)
+        {
+
+            if(pCmd->stage == STAGE_MSINIT)
+            {
+                UBOOT_BOOTTIME("[AT][MB][%s][%lu]_start\n",pCmd->cmd, MsSystemGetBootTime());
+                run_command(pCmd->cmd,  pCmd->flag);
+                UBOOT_BOOTTIME("[AT][MB][%s][%lu]_end\n",pCmd->cmd, MsSystemGetBootTime());
+            }
+
+            pCmd=getNextCmd(pCmd);
+            if(pCmd==NULL)
+            {
+                break;
+            }
+        }
+    }
+    else
+    {
+        printf("There are no any commands in table\n");
+    }
+
+
+    MstarInitByFun();
+#endif
+    #ifdef STATIC_RELIABLE_TEST
+    do_test_reliable_write();
+    #endif
+
+    return reval;
+}
+
+

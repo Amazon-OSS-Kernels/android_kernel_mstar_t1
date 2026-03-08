@@ -1,0 +1,81 @@
+/**
+* Copyright (c) 2006 - 2016 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*/
+//******************************************************************************
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//******************************************************************************
+////////////////////////////////////////////////////////////////////////////////
+//
+//
+//
+////////////////////////////////////////////////////////////////////////////////
+#ifndef DRV_WBLE_H
+#define DRV_WBLE_H
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+
+//-------------------------------------------------------------------------------------------------
+//  Macro and Define
+//-------------------------------------------------------------------------------------------------
+//  library information
+#define MSIF_WBLE_LIB_CODE               {'W','B','L','E'}
+#define MSIF_WBLE_LIBVER                 {'0','0'}
+#define MSIF_WBLE_BUILDNUM               {'0','2'}
+#define MSIF_WBLE_CHANGELIST             {'0','0','2','7','5','5','7','8'}
+#define WBLE_API_VERSION                  /* Character String for DRV/API version             */  \
+    MSIF_TAG,                           /* 'MSIF'                                           */  \
+    MSIF_CLASS,                         /* '00'                                             */  \
+    MSIF_CUS,                           /* 0x0000                                           */  \
+    MSIF_MOD,                           /* 0x0000                                           */  \
+    MSIF_CHIP,                                                                                  \
+    MSIF_CPU,                                                                                   \
+    MSIF_WBLE_LIB_CODE  ,                 /* IP__                                             */  \
+    MSIF_WBLE_LIBVER    ,                 /* 0.0 ~ Z.Z                                        */  \
+    MSIF_WBLE_BUILDNUM  ,                 /* 00 ~ 99                                          */  \
+    MSIF_WBLE_CHANGELIST,                 /* CL#                                              */  \
+    MSIF_OS
+
+#define WBLE_INITDATA_VERSION                1
+
+
+/// XC Return Value
+typedef enum
+{
+    E_DRVWBLE_RET_FAIL = 0,   ///<Fail
+    E_DRVWBLE_RET_OK,         ///<OK
+} E_DRVWBLE_ReturnValue;
+
+
+
+void MDrv_WBLE_Init(void);
+void MDrv_WBLE_EnableBLE(MS_BOOL bEnable);
+void MDrv_WBLE_EnableWLE(MS_BOOL bEnable);
+void MDrv_WBLE_SetBLE(MS_U8 u8Start, MS_U8 u8Slop);
+void MDrv_WBLE_SetWLE(MS_U8 u8Start, MS_U8 u8Slop);
+void MDrv_WBLE_Handler_BLEAvgLuma(MS_U8 u8AvgY, MS_U16 u16YTotalSum);
+void MDrv_WBLE_Set_SlopeValue(MS_U8 u8Slope);
+
+#ifdef __cplusplus
+}
+#endif
+
+
+
+#endif

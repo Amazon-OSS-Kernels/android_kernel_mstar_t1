@@ -1,0 +1,16 @@
+config DRV_HWI2C
+
+tristate "HWI2C"
+default n
+
+---help---
+Enable compilation option for driver HWI2C
+
+if DRV_HWI2C
+config HWIIC_INTERRUPT_MODE_ENABLE
+	bool "Enable HWIIC interrupt mode"
+	default n
+	help
+	  Select if you want to enable HWIIC interrupt mode. If unsure, say 'N'.
+
+endif

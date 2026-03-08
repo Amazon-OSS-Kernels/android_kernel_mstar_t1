@@ -1,0 +1,1123 @@
+/**
+* Copyright (c) 2006 - 2016 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*/
+//******************************************************************************
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//******************************************************************************
+////////////////////////////////////////////////////////////////////////////////
+//
+//
+//
+////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///
+/// file    drvIPAPool.c
+/// @brief  IPA Pool Driver
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+//-------------------------------------------------------------------------------------------------
+//  Include Files
+//-------------------------------------------------------------------------------------------------
+#if defined (MSOS_TYPE_LINUX)
+#include<sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <pthread.h>
+#include<fcntl.h>
+#include <unistd.h>
+#include <string.h>
+#include "MsCommon.h"
+#include "halCHIP.h"
+#include "halMPool.h"
+#include "drvIPAPool.h"
+#include "mdrv_ipa_pool_uapi.h"
+
+#ifndef ANDROID
+#define VPRINTF printf
+#else
+#include <sys/mman.h>
+#include <cutils/ashmem.h>
+#include <cutils/log.h>
+#define VPRINTF ALOGD
+#endif
+
+//-------------------------------------------------------------------------------------------------
+//  Local Defines
+//-------------------------------------------------------------------------------------------------
+#define MAX_IPAPOOLSIZE 16UL
+
+
+//
+//
+//for example:
+//area 1 map 2 times,area 2 map 2times,area 3 map 1 times,total map 2+2+1=5
+//
+//   map 2t  map 2t map 1t
+//   ------   ----
+//   ------   ----   ---
+//     1        2    3
+//   ------   ---- ------
+//-----------------------------same client
+#define MAX_CLIENT_MAP_NUM 8UL
+//-------------------------------------------------------------------------------------------------
+//  Local Structurs
+//-------------------------------------------------------------------------------------------------
+
+struct VIRT_MAP_INFO
+{
+    MS_U64 virt_addr;
+    MS_U64 length;
+    MS_BOOL bNonCache;
+    MS_U64 Physaddr;
+};
+struct IPA_Pool_Init_Param_No_P
+{
+    MS_U32 space_id;     //in: space id the pool will be created in
+    MS_U64 pool_name;//in: global identify name for pool to shared between multiple process
+
+    MS_U64 offset_in_heap;    //in: pool location in space
+    MS_U64 len;       //in: pool length in  space
+
+    MS_U32 pool_handle_id; //out: generate pool id based on space specified by space_id
+    MS_U32 miu;  //out: miu id this space belongs, index from 0.
+    enum IPA_SPACE_TYPE space_type;//out: return space type to application
+    MS_S32 error_code; // error code when pool init failed
+
+    MS_U64 space_length; //out: space leagth
+    MS_U64 space_miu_start_offset; //out: space start offset in miu
+};
+
+typedef struct
+{
+    struct IPA_Pool_Init_Param_No_P Init_Param;
+    MS_BOOL bIsUsed;
+    struct VIRT_MAP_INFO map_info[MAX_CLIENT_MAP_NUM];
+    volatile MS_BOOL polling_thread_delete_task_flag;
+    pthread_t pthIPAPollingId;
+    void (*polling_callback)(MS_U32 pool_handle_id,MS_U64 start,MS_U64 length);
+} IPAPOOL_INFO;
+
+//-------------------------------------------------------------------------------------------------
+//  Global Variables
+//-------------------------------------------------------------------------------------------------
+static MS_S32 _s32FdIPAPool = -1;
+static pthread_mutex_t  _IPA_POOL_Mutex = PTHREAD_MUTEX_INITIALIZER;
+static IPAPOOL_INFO IPAPool_Info[MAX_IPAPOOLSIZE];
+
+//-------------------------------------------------------------------------------------------------
+//  Debug Functions
+//-------------------------------------------------------------------------------------------------
+
+//-------------------------------------------------------------------------------------------------
+//  Local Functions
+//-------------------------------------------------------------------------------------------------
+static MS_BOOL _findEmpty_IPA_Pool_Entry(MS_U32 *index)
+{
+    MS_BOOL find = FALSE;
+    MS_U32 i;
+
+    *index = 0;
+    for (i = 0; i < MAX_IPAPOOLSIZE; i++)
+    {
+        if(IPAPool_Info[i].bIsUsed == FALSE)
+        {
+            find = TRUE;
+            *index = i;
+            break;
+        }
+    }
+
+    if(find == FALSE)
+        VPRINTF("Not enough IPAPool, must increase MAX_IPAPOOLSIZE!!\n");
+
+    return find;
+}
+
+
+static MS_BOOL _findPoolHandleId_InIPA_Pool_Table(MS_U32 pool_handle_id, MS_U32 *index)
+{
+    MS_BOOL find = FALSE;
+    MS_U32 i;
+
+    *index = 0;
+    for (i = 0; i < MAX_IPAPOOLSIZE; i++)
+    {
+        if((IPAPool_Info[i].bIsUsed == TRUE) && (IPAPool_Info[i].Init_Param.pool_handle_id == pool_handle_id))
+        {
+            find = TRUE;
+            *index = i;
+            break;
+        }
+    }
+
+    return find;
+}
+
+static MS_BOOL _findHeapId_InIPA_Pool_Table(struct IPA_Pool_Init_Param * Init_Param,MS_U32 *index)
+{
+    MS_BOOL find = FALSE;
+    MS_U32 i;
+
+    *index = 0;
+    for (i = 0; i < MAX_IPAPOOLSIZE; i++)
+    {
+        if((IPAPool_Info[i].bIsUsed == TRUE)
+			&& (IPAPool_Info[i].Init_Param.space_id == Init_Param->space_id)
+			&&(!strncmp((char *)(intptr_t)IPAPool_Info[i].Init_Param.pool_name, Init_Param->pool_name,strlen(Init_Param->pool_name)))
+			&& (IPAPool_Info[i].Init_Param.offset_in_heap == Init_Param->offset_in_heap)
+			&& (IPAPool_Info[i].Init_Param.len == Init_Param->len))
+        {
+            find = TRUE;
+            *index = i;
+            break;
+        }
+    }
+
+    return find;
+}
+
+//N.B.  This API only for each module debug code use,in each module release code,please do not call it !!!
+//in:pa value
+//out:whether in miu/heap/pool,and info about miu/heap/pool,and if in pool whether allocated.
+//return value:only allocated in pool will return TRUE,otherwise return FALSE.
+MS_BOOL __attribute__((weak)) PA_in_IPA_POOL_info(struct PA_In_IPA_Pool_Param * in_ipa_pool_info)
+{
+    MS_BOOL ret = FALSE;
+    int res = 0;
+    struct PA_In_IPA_Pool_Args in_ipa_pool_info_args;
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool <= 0)//may never open device
+    {
+        if ((_s32FdIPAPool = open("/dev/ipapool", O_RDWR)) < 0)
+        {
+            VPRINTF("open /dev/ipapool fail\n");
+            ret =  FALSE;
+            goto PA_in_IPA_POOL_info;
+        }
+
+        memset(IPAPool_Info, 0, sizeof(IPAPOOL_INFO)*MAX_IPAPOOLSIZE);
+    }
+    in_ipa_pool_info_args.PA = in_ipa_pool_info->PA;
+    res = ioctl(_s32FdIPAPool, IPA_POOL_IOC_PA_INFO, &in_ipa_pool_info_args);
+    if (res < 0 ||  in_ipa_pool_info_args.error_code < 0)
+    {
+        ret =  FALSE;
+        goto PA_in_IPA_POOL_info;
+
+    }
+    VPRINTF(" %s  PA:0x%lx   pa_state=%d\n",__FUNCTION__, (unsigned long)in_ipa_pool_info_args.PA,in_ipa_pool_info_args.pa_state);
+
+     in_ipa_pool_info->pa_state= in_ipa_pool_info_args.pa_state;
+     in_ipa_pool_info->miu= in_ipa_pool_info_args.miu;
+     if(in_ipa_pool_info->miu < 0)
+     {
+        VPRINTF("ipa error: %s failed, PA 0x%lx,miu=%d\n",__FUNCTION__, (unsigned long)in_ipa_pool_info_args.PA,in_ipa_pool_info_args.miu);
+        in_ipa_pool_info->in_heap = FALSE;
+        in_ipa_pool_info->allocated = FALSE;
+        ret =  FALSE;
+        goto PA_in_IPA_POOL_info;
+     }
+     in_ipa_pool_info->in_heap= in_ipa_pool_info_args.in_heap;
+     if(FALSE == in_ipa_pool_info->in_heap)
+     {
+        VPRINTF("ipa error: %s failed, PA 0x%lx,miu=%d,in_heap is FALSE\n",__FUNCTION__, (unsigned long)in_ipa_pool_info_args.PA,in_ipa_pool_info_args.miu);
+        in_ipa_pool_info->allocated = FALSE;
+        ret =  FALSE;
+        goto PA_in_IPA_POOL_info;
+     }
+     else
+     {
+         in_ipa_pool_info->space_id= in_ipa_pool_info_args.space_id;
+         in_ipa_pool_info->space_type= in_ipa_pool_info_args.space_type;
+         in_ipa_pool_info->space_miu_start_offset= in_ipa_pool_info_args.space_miu_start_offset;
+         in_ipa_pool_info->space_length= in_ipa_pool_info_args.space_length;
+         in_ipa_pool_info->pa_offset_in_heap= in_ipa_pool_info_args.pa_offset_in_heap;
+
+         in_ipa_pool_info->allocated = in_ipa_pool_info_args.allocated;
+         if(FALSE == in_ipa_pool_info->allocated)
+         {
+             VPRINTF("ipa error: %s failed, PA 0x%lx,miu=%d,in_ipa_pool_info_args.space_id=%d,allocated is FALSE\n",__FUNCTION__, (unsigned long)in_ipa_pool_info_args.PA,in_ipa_pool_info_args.miu,in_ipa_pool_info_args.space_id);
+             ret =  FALSE;
+             goto PA_in_IPA_POOL_info;
+         }
+         else
+         {
+             //in_ipa_pool_info->pool_handle_id= in_ipa_pool_info_args.pool_handle_id;
+#if defined (__aarch64__)
+            strcpy((char *)in_ipa_pool_info->pool_name , (char *)in_ipa_pool_info_args.pool_name);
+#else
+            strcpy((char *)in_ipa_pool_info->pool_name ,(char *)in_ipa_pool_info_args.pool_name);
+#endif
+            in_ipa_pool_info->pool_len = in_ipa_pool_info_args.pool_len;
+            in_ipa_pool_info->pool_offset_in_heap = in_ipa_pool_info_args.pool_offset_in_heap;
+            in_ipa_pool_info->pa_offset_in_pool = in_ipa_pool_info_args.pa_offset_in_pool;
+        }
+    }
+    ret =  TRUE;
+
+PA_in_IPA_POOL_info:
+
+   pthread_mutex_unlock(&_IPA_POOL_Mutex);
+   return ret;
+}
+
+MS_BOOL __attribute__((weak)) IN_IPA_POOL_To_PA(struct Pool_To_PA_Param * pool_to_pa_param)
+{
+    MS_BOOL ret = TRUE;
+    struct Pool_To_PA_Args pool_to_pa_args;
+    int res = 0;
+
+    VPRINTF("%s handle_id 0x%x offset_in_pool 0x%lx\n",
+        __FUNCTION__,pool_to_pa_param->pool_handle_id, (unsigned long)pool_to_pa_param->offset_in_pool);
+
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        ret = FALSE;
+        goto POOL_To_PA_DONE;
+    }
+
+    //input
+    pool_to_pa_args.pool_handle_id = pool_to_pa_param->pool_handle_id;
+    pool_to_pa_args.offset_in_pool = pool_to_pa_param->offset_in_pool;
+
+    res = ioctl(_s32FdIPAPool, IPA_POOL_IOC_POOL_TO_PA, &pool_to_pa_args);
+    if (res < 0 || pool_to_pa_args.error_code != IPAERROR_OK)
+    {
+        VPRINTF("%s fail: pool_handle_id %u, offset 0x%lx, error_code=0x%x  res=%d\n",__FUNCTION__, pool_to_pa_param->pool_handle_id,
+            (unsigned long)pool_to_pa_param->offset_in_pool,pool_to_pa_args.error_code,res);
+        ret = FALSE;
+        goto POOL_To_PA_DONE;
+    }
+
+    //output
+    pool_to_pa_param->PA = pool_to_pa_args.PA;
+    pool_to_pa_param->error_code = pool_to_pa_args.error_code;
+    pool_to_pa_param->miu = pool_to_pa_args.miu;
+    pool_to_pa_param->heap_id = pool_to_pa_args.heap_id;
+
+POOL_To_PA_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+
+    return ret;
+}
+
+
+//-------------------------------------------------------------------------------------------------
+//  Global Functions
+//-------------------------------------------------------------------------------------------------
+
+//-------------------------------------------------------------------------------------------------
+/// System initialzation
+/// @return TRUE(Success), FALSE(Failure)
+//-------------------------------------------------------------------------------------------------
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_Init(struct IPA_Pool_Init_Param * Init_Param)
+{
+    struct IPA_Pool_Init_Args ipa_init_args;
+    MS_U64 u64PhyAddr = 0;
+    MS_BOOL ret = TRUE;
+    MS_U32 idx = 0;
+    int res = 0;
+    VPRINTF("MApi_CMA_Pool_Init start\n");
+    VPRINTF("MApi_IPA_Pool_Init heap_id %u\n", Init_Param->space_id);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool <= 0)
+    {
+        if ((_s32FdIPAPool = open("/dev/ipapool", O_RDWR)) < 0)
+        {
+            VPRINTF("open /dev/ipapool fail\n");
+            ret =  FALSE;
+            goto IPA_POOL_INIT_DONE;
+        }
+
+        memset(IPAPool_Info, 0, sizeof(IPAPOOL_INFO)*MAX_IPAPOOLSIZE);
+    }
+
+
+    //avoid mmap more than one time
+    ret = _findHeapId_InIPA_Pool_Table(Init_Param, &idx);
+    if(ret == TRUE)
+    {
+         //memcpy(Init_Param,IPAPool_Info[idx].Init_Param,sizeof(struct IPA_Pool_Init_Param));
+         Init_Param->space_id = IPAPool_Info[idx].Init_Param.space_id;
+         Init_Param->pool_name = (char *)(intptr_t)IPAPool_Info[idx].Init_Param.pool_name;
+         Init_Param->offset_in_heap = IPAPool_Info[idx].Init_Param.offset_in_heap;
+         Init_Param->len = IPAPool_Info[idx].Init_Param.len;
+         Init_Param->pool_handle_id = IPAPool_Info[idx].Init_Param.pool_handle_id;
+         Init_Param->miu = IPAPool_Info[idx].Init_Param.miu;
+         Init_Param->space_type = IPAPool_Info[idx].Init_Param.space_type;
+         Init_Param->error_code = IPAPool_Info[idx].Init_Param.error_code;
+         Init_Param->space_length = IPAPool_Info[idx].Init_Param.space_length;
+         Init_Param->space_miu_start_offset = IPAPool_Info[idx].Init_Param.space_miu_start_offset;
+
+         VPRINTF("pool_handle_id %u already init!\n", IPAPool_Info[idx].Init_Param.pool_handle_id);
+         goto IPA_POOL_INIT_DONE;
+    }
+
+    ipa_init_args.heap_id = Init_Param->space_id;
+#if defined (__aarch64__)
+    strcpy((char *)ipa_init_args.pool_name , Init_Param->pool_name);
+#else
+    strcpy((char *)ipa_init_args.pool_name ,Init_Param->pool_name);
+#endif
+    ipa_init_args.offset_in_heap = Init_Param->offset_in_heap;
+    ipa_init_args.len = Init_Param->len;
+    res = ioctl(_s32FdIPAPool, IPA_POOL_IOC_INIT, &ipa_init_args);
+    if (res < 0 || ipa_init_args.error_code != IPAERROR_OK)
+    {
+        VPRINTF("ipa error: ipa init failed, heapid %u error_code %d\n", Init_Param->space_id, ipa_init_args.error_code);
+        ret =  FALSE;
+        goto IPA_POOL_INIT_CLOSE;
+    }
+
+    VPRINTF("MApi_CMA_Pool_Init heap_id %u, pool_handle_id %u heap_length %llu\n",
+		Init_Param->space_id, ipa_init_args.pool_handle_id, (long long unsigned int)ipa_init_args.heap_length);
+
+    Init_Param->pool_handle_id = ipa_init_args.pool_handle_id;
+    Init_Param->miu = ipa_init_args.miu;
+    Init_Param->space_type = ipa_init_args.heap_type;
+    Init_Param->error_code = ipa_init_args.error_code;
+    Init_Param->space_length = ipa_init_args.heap_length;
+    Init_Param->space_miu_start_offset = ipa_init_args.heap_miu_start_offset;
+    VPRINTF("MApi_CMA_Pool_Init before _findEmpty_IPA_Pool_Entry\n");
+    ret = _findEmpty_IPA_Pool_Entry(&idx);
+    VPRINTF("MApi_CMA_Pool_Init after _findEmpty_IPA_Pool_Entry\n");
+    if(ret == FALSE)
+    {
+        VPRINTF("ipa error: pool_handle_id %u init failed!\n", ipa_init_args.pool_handle_id);
+        goto IPA_POOL_INIT_DONE;
+    }
+VPRINTF("MApi_CMA_Pool_Init before _miu_offset_to_phy\n");
+    _miu_offset_to_phy(ipa_init_args.miu, ipa_init_args.heap_miu_start_offset, u64PhyAddr); // get miu base addr
+    VPRINTF("MApi_CMA_Pool_Init after _miu_offset_to_phy   idx=%d  ",idx);
+
+
+    #if defined (__aarch64__)//make sure when build no warning.
+    VPRINTF("sizeof(struct IPA_Pool_Init_Param)=%lu\n",sizeof(struct IPA_Pool_Init_Param));
+    #else
+    VPRINTF("sizeof(struct IPA_Pool_Init_Param)=%u\n",sizeof(struct IPA_Pool_Init_Param));
+    #endif
+
+    /* IPA Pool setting*/
+    VPRINTF("MApi_CMA_Pool_Init before memcpy\n");
+    //memcpy(IPAPool_Info[idx].Init_Param,Init_Param,sizeof(struct IPA_Pool_Init_Param));
+#if 1
+    VPRINTF("MApi_CMA_Pool_Init before space_id\n");
+    IPAPool_Info[idx].Init_Param.space_id = Init_Param->space_id;
+
+    VPRINTF("MApi_CMA_Pool_Init before pool_name \n");
+#if defined (__aarch64__)
+    IPAPool_Info[idx].Init_Param.pool_name = (MS_U64)Init_Param->pool_name;
+#else
+    IPAPool_Info[idx].Init_Param.pool_name = (MS_U32)Init_Param->pool_name;
+#endif
+    VPRINTF("MApi_CMA_Pool_Init before offset \n");
+    IPAPool_Info[idx].Init_Param.offset_in_heap =Init_Param->offset_in_heap;
+    VPRINTF("MApi_CMA_Pool_Init before len \n");
+    IPAPool_Info[idx].Init_Param.len =Init_Param->len;
+    VPRINTF("MApi_CMA_Pool_Init before pool_handle_id \n");
+    IPAPool_Info[idx].Init_Param.pool_handle_id =Init_Param->pool_handle_id;
+    VPRINTF("MApi_CMA_Pool_Init before miu \n");
+    IPAPool_Info[idx].Init_Param.miu =Init_Param->miu;
+    VPRINTF("MApi_CMA_Pool_Init before space_type \n");
+    IPAPool_Info[idx].Init_Param.space_type =Init_Param->space_type;
+    VPRINTF("MApi_CMA_Pool_Init before error_code \n");
+    IPAPool_Info[idx].Init_Param.error_code =Init_Param->error_code;
+    VPRINTF("MApi_CMA_Pool_Init before space_length \n");
+    IPAPool_Info[idx].Init_Param.space_length =Init_Param->space_length;
+    VPRINTF("MApi_CMA_Pool_Init before space_miu_start_offset \n");
+    IPAPool_Info[idx].Init_Param.space_miu_start_offset =Init_Param->space_miu_start_offset;
+#endif
+
+    VPRINTF("MApi_CMA_Pool_Init after memcpy\n");
+    IPAPool_Info[idx].bIsUsed = TRUE;
+    IPAPool_Info[idx].pthIPAPollingId = -1;//in init,no polling id yet.
+    IPAPool_Info[idx].polling_thread_delete_task_flag = FALSE;
+
+    VPRINTF("MApi_IPA_Pool_Init heap_id %u pool_handle_id %u miu %u offset 0x%lx len 0x%lx\n",
+		Init_Param->space_id, Init_Param->pool_handle_id, Init_Param->miu, (unsigned long)Init_Param->offset_in_heap, (unsigned long)Init_Param->len);
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+    VPRINTF("MApi_CMA_Pool_Init  before return %d\n",ret);
+    return ret;
+
+IPA_POOL_INIT_CLOSE:
+    VPRINTF("MApi_CMA_Pool_Init  before close\n");
+    close(_s32FdIPAPool);
+    VPRINTF("MApi_CMA_Pool_Init  after close\n");
+IPA_POOL_INIT_DONE:
+    VPRINTF("MApi_CMA_Pool_Init  after IPA_POOL_INIT_DONE  ret=%d\n",ret);
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+
+    return ret;
+}
+
+//MS_U32 u32flag. Special Flag for customer mem allocation
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_GetMem(struct IPA_Pool_GetMem_Param * get_param)
+{
+    MS_BOOL ret = TRUE;
+    struct IPA_Pool_Alloc_Args ipa_alloc_args;
+    int res = 0;
+
+    VPRINTF("MApi_IPA_Pool_GetMem handle_id 0x%x length 0x%lx\n",
+		get_param->pool_handle_id, (unsigned long)get_param->length);
+
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        ret = FALSE;
+        goto IPA_POOL_GETMEM_DONE;
+    }
+
+    ipa_alloc_args.pool_handle_id = get_param->pool_handle_id;
+    ipa_alloc_args.offset_in_pool = get_param->offset_in_pool;
+    ipa_alloc_args.length = get_param->length;
+    ipa_alloc_args.timeout = 0;// 0 means if fail ,will not try again
+
+    res = ioctl(_s32FdIPAPool, IPA_POOL_IOC_ALLOC, &ipa_alloc_args);
+    if (res < 0 || ipa_alloc_args.error_code != IPAERROR_OK)
+    {
+        VPRINTF("ipa pool get memory fail: pool_handle_id %u, offset 0x%lx, len 0x%lx  ipa_alloc_args.error_code=0x%x  res=%d\n", get_param->pool_handle_id,
+			(unsigned long)get_param->offset_in_pool, (unsigned long)get_param->length,ipa_alloc_args.error_code,res);
+        ret = FALSE;
+        goto IPA_POOL_GETMEM_DONE;
+    }
+
+    get_param->error_code = ipa_alloc_args.error_code;
+
+IPA_POOL_GETMEM_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+
+    return ret;
+}
+
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_PutMem(struct IPA_Pool_PutMem_Param * put_param)
+{
+    MS_BOOL ret = TRUE;
+    struct IPA_Pool_free_Args ipa_free_args;
+
+    VPRINTF("MApi_IPA_Pool_PutMem handle_id 0x%x length 0x%lx offset 0x%lx\n",
+		put_param->pool_handle_id, (unsigned long)put_param->length, (unsigned long)put_param->offset_in_pool);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if(_s32FdIPAPool < 0)
+    {
+        ret = FALSE;
+        goto IPA_POOL_PUTMEM_DONE;
+    }
+
+    ipa_free_args.pool_handle_id = put_param->pool_handle_id;
+    ipa_free_args.offset_in_pool = put_param->offset_in_pool;
+    ipa_free_args.length = put_param->length;
+    if(ioctl(_s32FdIPAPool, IPA_POOL_IOC_FREE, &ipa_free_args))
+    {
+        VPRINTF("ipa pool put memory fail: pool_handle_id 0x%x, offset 0x%lx, len 0x%lx\n",
+			put_param->pool_handle_id, (unsigned long)put_param->offset_in_pool,(unsigned long)put_param->length);
+        ret = FALSE;
+        goto IPA_POOL_PUTMEM_DONE;
+    }
+
+IPA_POOL_PUTMEM_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+
+    return ret;
+}
+
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_Release(MS_U32 pool_handle_id)
+{
+    MS_BOOL ret = TRUE;
+    struct IPA_Pool_Deinit_Args deinit_args;
+    struct IPA_Pool_Unmap_Args unmap_args;
+
+    MS_U32 idx = 0;
+    int res = 0,i=0;
+
+    VPRINTF("MApi_CMA_Pool_Release handle_id %u\n", pool_handle_id);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        ret = FALSE;
+        goto IPA_POOL_RELEASE_DONE;
+    }
+
+    ret = _findPoolHandleId_InIPA_Pool_Table(pool_handle_id, &idx);
+    if(ret == TRUE)
+    {
+        for(i=0;i<MAX_CLIENT_MAP_NUM;i++)
+        {
+        // tmp_map_info
+            if((0 !=IPAPool_Info[idx].map_info[i].virt_addr)
+			    && (0 != IPAPool_Info[idx].map_info[i].length))
+            {
+                unmap_args.virt_addr =	IPAPool_Info[idx].map_info[i].virt_addr;
+                unmap_args.length = IPAPool_Info[idx].map_info[i].length;
+
+                MsOS_MPool_Remove_PA2VARange(IPAPool_Info[idx].map_info[i].Physaddr, IPAPool_Info[idx].map_info[i].virt_addr, IPAPool_Info[idx].map_info[i].length, IPAPool_Info[idx].map_info[i].bNonCache);
+                res = ioctl(_s32FdIPAPool, IPA_POOL_IOC_UNMAP, &unmap_args);
+                if (res < 0)
+                {
+                    VPRINTF("error: pool_handle_id %u unmap failed\n", pool_handle_id);
+                    ret = FALSE;
+                    goto IPA_POOL_RELEASE_DONE;
+                }
+
+                IPAPool_Info[idx].map_info[i].virt_addr = 0;
+                IPAPool_Info[idx].map_info[i].length = 0;
+            }
+        }
+
+        if(MAX_CLIENT_MAP_NUM == i)
+        {
+            // if same client all maps have been unmapped ,set  IPAPool_Info[idx].bIsUsed be FALSE
+            IPAPool_Info[idx].bIsUsed = FALSE;
+            IPAPool_Info[idx].Init_Param.pool_handle_id = 0;
+        }
+    }
+
+    deinit_args.pool_handle_id = pool_handle_id;
+
+    if (ioctl(_s32FdIPAPool, IPA_POOL_IOC_DEINIT, &deinit_args))
+    {
+        VPRINTF("pool_handle_id %u deinit fail\n", pool_handle_id);
+        ret = FALSE;
+        goto IPA_POOL_RELEASE_DONE;
+    }
+    ret = TRUE; //not find the pool hand id
+
+    //after deinit, if have polling thread,should delete task
+    if(IPAPool_Info[idx].pthIPAPollingId != -1)
+    {
+        #if 0//no need this while,for later pthread_join + pthread_cancel will wait for set delete_task_flag.
+        while(1)
+        {
+            if(TRUE == IPAPool_Info[idx].polling_thread_delete_task_flag)
+                break;
+        }
+        #endif
+
+        //N.B. here we do not directly use MsOS_DeleteTask but use pthread_join + pthread_cancel,
+        //For in MsOS_DeleteTask,first use pthread_cancel and then use pthread_join and that will
+        //cause hang.
+        //MsOS_DeleteTask (IPAPool_Info[idx].pthIPAPollingId);//delete polling task
+        pthread_join(IPAPool_Info[idx].pthIPAPollingId, NULL);
+
+        #if 0
+        //build SN lib can find pthread_cancel,
+        //but build AN lib,can not find pthread_cancel,
+        //in fact only need pthread_join,no need pthread_cancel.
+        pthread_cancel(IPAPool_Info[idx].pthIPAPollingId);//delete polling task
+        #endif
+
+        if(TRUE != IPAPool_Info[idx].polling_thread_delete_task_flag)
+        {
+            printf("error !!!!!!   after MsOS_DeleteTask  polling_thread_delete_task_flag is not TRUE!!!\n");
+            ret = FALSE;
+        }
+
+    }
+
+
+IPA_POOL_RELEASE_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+    return ret;
+}
+
+//allow a same input [pool_handle_id, offset_in_pool, length, cache_type] map for more than once,
+//and get different result output [virt_addr]
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_MapUserVA(struct IPA_Pool_Map_Param * map_param)
+{
+    MS_BOOL ret = TRUE;
+    int res = 0;
+    struct IPA_Pool_Map_Args map_args;
+    MS_U32 idx = 0;
+    VPRINTF("MApi_IPA_Pool_MapUserVA pool_handle_id %u, offset_in_pool 0x%lx, len 0x%lx,  cache_type %u\n", map_param->pool_handle_id,
+		(unsigned long)map_param->offset_in_pool, (unsigned long)map_param->length,map_param->cache_type);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        ret = FALSE;
+        goto IPA_POOL_MapUserVA_DONE;
+    }
+
+    if(0 == map_param->length)
+    {
+        VPRINTF("ipa pool MapUserVA  error, len 0x%lx is invalid\n",  (unsigned long)map_param->length);
+        ret = FALSE;
+        goto IPA_POOL_MapUserVA_DONE;
+    }
+
+    map_args.pool_handle_id = map_param->pool_handle_id;
+    map_args.offset_in_pool = map_param->offset_in_pool;
+    map_args.length = map_param->length;
+    map_args.map_va_type = map_param->cache_type;
+
+    res = ioctl(_s32FdIPAPool, IPA_POOL_IOC_MAP, &map_args);
+    VPRINTF("MApi_IPA_Pool_MapUserVA after ioctl\n");
+    if (res < 0 || map_args.error_code != IPAERROR_OK)
+    {
+        VPRINTF("ipa pool MapUserVA  fail: pool_handle_id %u, offset_in_pool 0x%lx, len 0x%lx,  cache_type %u\n", map_param->pool_handle_id,
+			(unsigned long)map_param->offset_in_pool, (unsigned long)map_param->length,map_param->cache_type);
+        ret = FALSE;
+        goto IPA_POOL_MapUserVA_DONE;
+    }
+    VPRINTF("MApi_IPA_Pool_MapUserVA before virt_addr\n");
+    map_param->virt_addr = map_args.virt_addr;
+    map_param->error_code = map_args.error_code;
+    VPRINTF("MApi_IPA_Pool_MapUserVA before _findPoolHandleId_InIPA_Pool_Table\n");
+
+    ret = _findPoolHandleId_InIPA_Pool_Table(map_param->pool_handle_id, &idx);
+    VPRINTF("MApi_IPA_Pool_MapUserVA after _findPoolHandleId_InIPA_Pool_Table\n");
+    if(ret == TRUE)
+    {
+        int i=0;
+        VPRINTF("MApi_IPA_Pool_MapUserVA before for\n");
+        for(i=0;i<MAX_CLIENT_MAP_NUM;i++)
+        {
+            VPRINTF("MApi_IPA_Pool_MapUserVA before if\n");
+            if((0 == IPAPool_Info[idx].map_info[i].virt_addr)
+                    || (0 == IPAPool_Info[idx].map_info[i].length))
+            {
+                VPRINTF("MApi_IPA_Pool_MapUserVA inside if\n");
+                IPAPool_Info[idx].map_info[i].virt_addr  = map_args.virt_addr;
+                IPAPool_Info[idx].map_info[i].length = map_args.length;
+                VPRINTF("MApi_IPA_Pool_MapUserVA before _miu_offset_to_phy\n");
+                _miu_offset_to_phy(IPAPool_Info[idx].Init_Param.miu, IPAPool_Info[idx].Init_Param.offset_in_heap + map_param->offset_in_pool, IPAPool_Info[idx].map_info[i].Physaddr); // get miu base addr
+                if(IPA_VA_CACHE_NONE_CACHE_Param == map_param->cache_type)
+                    IPAPool_Info[idx].map_info[i].bNonCache = TRUE;
+                else
+                    IPAPool_Info[idx].map_info[i].bNonCache = FALSE;
+                VPRINTF("MApi_IPA_Pool_MapUserVA before MsOS_MPool_Add_PA2VARange\n");
+                MsOS_MPool_Add_PA2VARange(IPAPool_Info[idx].map_info[i].Physaddr, IPAPool_Info[idx].map_info[i].virt_addr, IPAPool_Info[idx].map_info[i].length, IPAPool_Info[idx].map_info[i].bNonCache);
+                break;
+            }
+        }
+        VPRINTF("MApi_IPA_Pool_MapUserVA after for\n");
+        if(MAX_CLIENT_MAP_NUM == i)
+        {
+            VPRINTF("print important log for 3 times :a same client mapped %lu times,unable  map once more!!!!\n", MAX_CLIENT_MAP_NUM);
+            VPRINTF("print important log for 3 times :a same client mapped %lu times,unable  map once more!!!!\n", MAX_CLIENT_MAP_NUM);
+            VPRINTF("print important log for 3 times :a same client mapped %lu times,unable  map once more!!!!\n", MAX_CLIENT_MAP_NUM);
+            //here later can add code for dump map info
+            ret = FALSE;
+            goto IPA_POOL_MapUserVA_DONE;
+        }
+    }
+    VPRINTF("MApi_IPA_Pool_MapUserVA before IPA_POOL_MapUserVA_DONE\n");
+
+IPA_POOL_MapUserVA_DONE:
+    VPRINTF("MApi_IPA_Pool_MapUserVA after IPA_POOL_MapUserVA_DONE\n");
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+    return ret;
+}
+
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_MapVA(struct IPA_Pool_Map_Param * map_param)
+{
+    return MApi_IPA_Pool_MapUserVA(map_param);
+}
+
+void  __attribute__((weak)) MApi_IPA_Pool_UnmapUserVA(struct IPA_Pool_Unmap_Param * unmap_param)
+{
+    MS_BOOL ret = TRUE;
+    int res = 0;
+    int i=0,idx=0,find_virt_info_i=-1,find_virt_info_idx=-1;
+    MS_BOOL find_virt_info = FALSE;
+    struct IPA_Pool_Unmap_Args unmap_args;
+    VPRINTF("MApi_IPA_Pool_UnmapUserVA   virt_addr 0x%lx, len 0x%lx \n",
+		(unsigned long)unmap_param->virt_addr, (unsigned long)unmap_param->length);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        ret = FALSE;
+        goto IPA_POOL_UnmapUserVA_DONE;
+    }
+    for(idx=0;idx < MAX_IPAPOOLSIZE;idx++)
+    {
+        if(TRUE == IPAPool_Info[idx].bIsUsed)
+        {
+            for(i=0;i<MAX_CLIENT_MAP_NUM;i++)
+            {
+                if((unmap_param->virt_addr == IPAPool_Info[idx].map_info[i].virt_addr)
+			  	 && (unmap_param->length == IPAPool_Info[idx].map_info[i].length))
+                {
+                    find_virt_info = TRUE;
+                    find_virt_info_idx = idx;
+                    find_virt_info_i = i;
+                }
+            }
+        }
+    }
+    if(FALSE == find_virt_info)
+    {
+        VPRINTF("print important log for 3 times :map and unmap area should be strict equal !!!!  virt_addr=0x%lx,length=0x%lx\n", (unsigned long)unmap_param->virt_addr,(unsigned long)unmap_param->length);
+        VPRINTF("print important log for 3 times :map and unmap area should be strict equal !!!!  virt_addr=0x%lx,length=0x%lx\n", (unsigned long)unmap_param->virt_addr,(unsigned long)unmap_param->length);
+        VPRINTF("print important log for 3 times :map and unmap area should be strict equal !!!!  virt_addr=0x%lx,length=0x%lx\n", (unsigned long)unmap_param->virt_addr,(unsigned long)unmap_param->length);
+        //later will add some debug code
+        ret = FALSE;
+        goto IPA_POOL_UnmapUserVA_DONE;
+    }
+    unmap_args.virt_addr = unmap_param->virt_addr;
+    unmap_args.length = unmap_param->length;
+    MsOS_MPool_Remove_PA2VARange(IPAPool_Info[find_virt_info_idx].map_info[find_virt_info_i].Physaddr, IPAPool_Info[find_virt_info_idx].map_info[find_virt_info_i].virt_addr, IPAPool_Info[find_virt_info_idx].map_info[find_virt_info_i].length, IPAPool_Info[find_virt_info_idx].map_info[find_virt_info_i].bNonCache);
+    res = ioctl(_s32FdIPAPool,IPA_POOL_IOC_UNMAP,&unmap_args);
+    if (res < 0)
+    {
+        VPRINTF("ipa pool UnmapUserVA  fail:  virt_addr 0x%lx, len 0x%lx \n",
+			(unsigned long)unmap_param->virt_addr, (unsigned long)unmap_param->length);
+        ret = FALSE;
+        goto IPA_POOL_UnmapUserVA_DONE;
+    }
+    IPAPool_Info[find_virt_info_idx].map_info[find_virt_info_i].virt_addr = 0;
+    IPAPool_Info[find_virt_info_idx].map_info[find_virt_info_i].length = 0;
+
+IPA_POOL_UnmapUserVA_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+
+    return;
+}
+
+void  __attribute__((weak)) MApi_IPA_Pool_UnmapVA(struct IPA_Pool_Unmap_Param * unmap_param)
+{
+    return MApi_IPA_Pool_UnmapUserVA(unmap_param);
+}
+
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_DCacheFlush(struct IPA_Pool_DCacheFlush_Param* dcache_flush_param)
+{
+    MS_BOOL ret = TRUE;
+    int res = 0;
+    struct IPA_Pool_DCacheFlush_Args dcache_flush_args;
+    VPRINTF("MApi_IPA_Pool_DCacheFlush  virt_addr 0x%lx, length 0x%lx flush_type 0x%x\n",
+		(unsigned long)dcache_flush_param->virt_addr, (unsigned long)dcache_flush_param->length, dcache_flush_param->flush_type);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        ret = FALSE;
+        goto IPA_POOL_DCacheFlush_DONE;
+    }
+
+    dcache_flush_args.virt_addr = dcache_flush_param->virt_addr;
+    dcache_flush_args.length = dcache_flush_param->length;
+    dcache_flush_args.flush_type = dcache_flush_param->flush_type;
+    res = ioctl(_s32FdIPAPool,IPA_POOL_IOC_FLUSH,&dcache_flush_args);
+    if (res < 0)
+    {
+        VPRINTF("ipa pool DCacheFlush  fail:  virt_addr 0x%lx, length 0x%lx flush_type 0x%x\n",
+		(unsigned long)dcache_flush_param->virt_addr, (unsigned long)dcache_flush_param->length, dcache_flush_param->flush_type);
+        ret = FALSE;
+        goto IPA_POOL_DCacheFlush_DONE;
+    }
+
+IPA_POOL_DCacheFlush_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+    return ret;
+}
+
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_HEAP_ATTR(struct IPA_Pool_Heap_Attr_Param* heap_attr_param)
+{
+    MS_BOOL ret = TRUE;
+    int res = 0;
+    struct IPA_Pool_Heap_Attr heap_attr_args;
+    VPRINTF("MApi_IPA_Pool_HEAP_ATTR  heap_id 0x%x\n", heap_attr_param->heap_id);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        ret = FALSE;
+        goto IPA_POOL_HEAP_ATTR_DONE;
+    }
+
+    heap_attr_args.heap_id = heap_attr_param->heap_id;
+    res = ioctl(_s32FdIPAPool,IPA_POOL_IOC_HEAP_ATTR,&heap_attr_args);
+    if (res < 0 || heap_attr_args.error_code != IPAERROR_OK)
+    {
+        VPRINTF("ipa pool HEAP_ATTR  fail:  heap_id 0x%x\n",heap_attr_param->heap_id);
+        ret = FALSE;
+        goto IPA_POOL_HEAP_ATTR_DONE;
+    }
+    memcpy(heap_attr_param->name,heap_attr_args.name,IPAPOOL_HEAP_NAME_MAX_LEN);
+    heap_attr_param->heap_miu_start_offset = heap_attr_args.heap_miu_start_offset;
+    heap_attr_param->heap_length = heap_attr_args.heap_length;
+    heap_attr_param->miu = heap_attr_args.miu;
+    heap_attr_param->heap_type = heap_attr_args.heap_type;
+    heap_attr_param->error_code = heap_attr_args.error_code;
+
+IPA_POOL_HEAP_ATTR_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+    return ret;
+}
+
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_GETIPCHANDLE(struct IPA_Pool_GetIpcHandle_Param* getipchandle_param)
+{
+    MS_BOOL ret = TRUE;
+    int res = 0;
+    struct IPA_Pool_GetIpcHandle_Args getipchandle_args;
+    VPRINTF("MApi_IPA_Pool_GETIPCHANDLE  pool_handle_id 0x%x\n", getipchandle_param->pool_handle_id);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        VPRINTF("MApi_IPA_Pool_GETIPCHANDLE  fail  pool_handle_id=0x%x,   _s32FdIPAPool=%d \n", getipchandle_param->pool_handle_id,_s32FdIPAPool);
+        ret = FALSE;
+        goto IPA_POOL_GETIPCHANDLE_DONE;
+    }
+
+    getipchandle_args.pool_handle_id = getipchandle_param->pool_handle_id;
+    res = ioctl(_s32FdIPAPool,IPA_POOL_IOC_GETIPCHANDLE,&getipchandle_args);
+    if (res < 0 || getipchandle_args.error_code != IPAERROR_OK)
+    {
+        VPRINTF("ipa pool GETIPCHANDLE  fail:  pool_handle_id 0x%x\n",getipchandle_param->pool_handle_id);
+        ret = FALSE;
+        goto IPA_POOL_GETIPCHANDLE_DONE;
+    }
+    getipchandle_param->ipc_handle_id = getipchandle_args.ipc_handle_id;
+    getipchandle_param->error_code = getipchandle_args.error_code;
+
+IPA_POOL_GETIPCHANDLE_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+    return ret;
+}
+
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_InstallIpcHandle(struct IPA_Pool_InstallIpcHandle_Param* installipchandle_param)
+{
+    MS_BOOL ret = TRUE;
+    int res = 0;
+    struct IPA_Pool_InstallIpcHandle_Args installipchandle_args;
+    VPRINTF("MApi_IPA_Pool_InstallIpcHandle  ipc_handle_id 0x%x\n", installipchandle_param->ipc_handle_id);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        VPRINTF("MApi_IPA_Pool_InstallIpcHandle ipc_handle_id=0x%x,   _s32FdIPAPool=%d \n", installipchandle_param->ipc_handle_id,_s32FdIPAPool);
+        //this process may not open ipapool yet,need we open for this process.
+        if ((_s32FdIPAPool = open("/dev/ipapool", O_RDWR)) < 0)
+        {
+            VPRINTF("Open /dev/ipapool fail   ipc_handle_id=0x%x,   _s32FdIPAPool=%d\n", installipchandle_param->ipc_handle_id,_s32FdIPAPool);
+            ret =  FALSE;
+            goto IPA_POOL_InstallIpcHandle_DONE;
+        }
+
+        memset(IPAPool_Info, 0, sizeof(IPAPOOL_INFO)*MAX_IPAPOOLSIZE);
+
+    }
+
+    installipchandle_args.ipc_handle_id = installipchandle_param->ipc_handle_id;
+    // VPRINTF("MApi_IPA_Pool_InstallIpcHandle  ipc_handle_id=0x%x  debug will ioctl\n", installipchandle_param->ipc_handle_id);
+    res = ioctl(_s32FdIPAPool,IPA_POOL_IOC_INSTALLIPCHANDLE,&installipchandle_args);
+    // VPRINTF("MApi_IPA_Pool_InstallIpcHandle  ipc_handle_id=0x%x  debug after ioctl  res=%d\n", installipchandle_param->ipc_handle_id,res);
+
+    if (res < 0 || installipchandle_args.error_code != IPAERROR_OK)
+    {
+        VPRINTF("ipa pool InstallIpcHandle  fail:  heap_id 0x%x\n",installipchandle_param->ipc_handle_id);
+        ret = FALSE;
+        goto IPA_POOL_InstallIpcHandle_DONE;
+    }
+    installipchandle_param->pool_handle_id = installipchandle_args.pool_handle_id;
+    installipchandle_param->error_code = installipchandle_args.error_code;
+
+IPA_POOL_InstallIpcHandle_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+    return ret;
+}
+
+//unit of timeout is millisecond.
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_GetMem_Timeout(struct IPA_Pool_GetMem_Param* get_param,MS_U32 timeout_ms)
+{
+    MS_BOOL ret = TRUE;
+    struct IPA_Pool_Alloc_Args ipa_alloc_args;
+    int res = 0;
+
+    VPRINTF("MApi_IPA_Pool_GetMem handle_id 0x%x length 0x%lx timeout 0x%x\n",
+		get_param->pool_handle_id, (unsigned long)get_param->length,timeout_ms);
+
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        ret = FALSE;
+        goto IPA_POOL_GETMEM_DONE;
+    }
+
+    ipa_alloc_args.pool_handle_id = get_param->pool_handle_id;
+    ipa_alloc_args.offset_in_pool = get_param->offset_in_pool;
+    ipa_alloc_args.length = get_param->length;
+
+    ipa_alloc_args.timeout = timeout_ms;
+
+    res = ioctl(_s32FdIPAPool, IPA_POOL_IOC_ALLOC, &ipa_alloc_args);
+    if (res < 0 || ipa_alloc_args.error_code != IPAERROR_OK)
+    {
+        MS_U32 each_delay_ms = 50;//empirical value in our test.
+        MS_U32 now_delay_ms=0;
+        while(1)
+        {
+            // delay and try again
+            pthread_mutex_unlock(&_IPA_POOL_Mutex);
+
+            VPRINTF("%s:%d each_delay_ms=%u, delay and try alloc again now_delay_ms=%u\n",__FUNCTION__,__LINE__,each_delay_ms,now_delay_ms);
+
+            ipa_alloc_args.timeout = 0;//into kernel will not consider timeout again
+            MsOS_DelayTask(each_delay_ms);
+            pthread_mutex_lock(&_IPA_POOL_Mutex);
+            res = ioctl(_s32FdIPAPool, IPA_POOL_IOC_ALLOC, &ipa_alloc_args);
+            if ((res == 0) && (ipa_alloc_args.error_code == IPAERROR_OK))
+                break;
+            now_delay_ms += each_delay_ms;
+            if(now_delay_ms >= timeout_ms)
+                break;
+        }
+        if (res < 0 || ipa_alloc_args.error_code != IPAERROR_OK)
+        {
+            VPRINTF("ipa pool get memory fail: pool_handle_id %u, offset 0x%lx, len 0x%lx  ipa_alloc_args.error_code=0x%x ipa_alloc_args.timeout=%u res=%d\n", get_param->pool_handle_id,
+			(unsigned long)get_param->offset_in_pool, (unsigned long)get_param->length,ipa_alloc_args.error_code,ipa_alloc_args.timeout,res);
+            ret = FALSE;
+            goto IPA_POOL_GETMEM_DONE;
+        }
+    }
+
+    get_param->error_code = ipa_alloc_args.error_code;
+
+IPA_POOL_GETMEM_DONE:
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+
+    return ret;
+
+}
+
+void *__attribute__((weak)) IPA_Pool_Polling_Task(MS_VIRT argc)
+{
+    MS_BOOL ret = TRUE;
+    int res=0;
+    MS_U32 idx = 0;
+    struct IPA_Pool_Event_Args pool_event_args;
+    MS_U32 pool_handle_id  = (*(MS_U32 *)argc);
+
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if (_s32FdIPAPool < 0)
+    {
+        VPRINTF("%s  fail  \n",__FUNCTION__);
+        ret = FALSE;
+        pthread_mutex_unlock(&_IPA_POOL_Mutex);
+        return NULL;
+    }
+    pool_event_args.pool_handle_id = pool_handle_id;
+
+    ret = _findPoolHandleId_InIPA_Pool_Table(pool_event_args.pool_handle_id, &idx);
+
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+
+    if(ret == FALSE)
+    {
+        VPRINTF("ipa pool IPA_Pool_Polling_Task  fail not find in pool table\n");
+        return NULL;
+    }
+
+    while(1)
+    {
+        //ioctl for event and after callback,shoud ioctl again.
+        //before each ioctl,should clear invalid event value.
+        memset(&pool_event_args,0,sizeof(struct IPA_Pool_Event_Args));
+        pool_event_args.pool_handle_id = pool_handle_id;
+        res = ioctl(_s32FdIPAPool,IPA_POOL_IOC_POLL,&pool_event_args);
+        if(res < 0)
+        {
+            VPRINTF("ipa pool IPA_Pool_Polling_Task  fail\n");
+            ret = FALSE;
+            goto IPA_POOL_POLLING_TASK_DONE;
+        }
+
+        if(IPA_EVENT_NO_WAIT== pool_event_args.event )
+        {
+            break;
+        }
+
+        else if(IPA_EVENT_CONFLICT == pool_event_args.event )
+        {
+            //invoke callback corresponding to that pool event
+            IPAPool_Info[idx].polling_callback(pool_event_args.pool_handle_id,pool_event_args.start,pool_event_args.length);//call callback
+        }
+        else
+        {
+            VPRINTF("%s error ,event %d is invalid !!! but continue while\n",__FUNCTION__,pool_event_args.event);
+        }
+    }
+
+IPA_POOL_POLLING_TASK_DONE:
+
+    //before return ,set this flag.And this flag will be checked in MApi_IPA_Pool_Release.
+    IPAPool_Info[idx].polling_thread_delete_task_flag = TRUE;
+    return NULL;
+
+}
+
+//suggest this API be invoked after MApi_IPA_Pool_Init.
+MS_BOOL __attribute__((weak)) MApi_IPA_Pool_Register_Notify(struct IPA_Pool_Polling_Param *polling_param)
+{
+    MS_BOOL ret = TRUE;
+    pthread_t pthIPAPollingId = -1;
+    MS_U32 idx = 0;
+    int pthread_res;
+
+    VPRINTF("%s\n",__FUNCTION__);
+    pthread_mutex_lock(&_IPA_POOL_Mutex);
+    if(!polling_param->polling_callback)
+    {
+        VPRINTF("%u have no polling_callback function , %s return directly\n",polling_param->pool_handle_id,__FUNCTION__);
+        pthread_mutex_unlock(&_IPA_POOL_Mutex);
+        return TRUE;
+    }
+
+    ret = _findPoolHandleId_InIPA_Pool_Table(polling_param->pool_handle_id, &idx);
+
+    if(ret == FALSE)//not find idx
+    {
+         VPRINTF(" %s ipa pool fail not find pool_handle_id %u in pool table\n",__FUNCTION__,polling_param->pool_handle_id);
+         pthread_mutex_unlock(&_IPA_POOL_Mutex);
+         return FALSE;
+    }
+
+    if(-1 == IPAPool_Info[idx].pthIPAPollingId) //no polling id refer to pool handle id
+    {
+
+        //create polling thread
+        pthread_res = pthread_create(&pthIPAPollingId,
+                                                NULL,
+                                                (void *)IPA_Pool_Polling_Task,
+                                                &polling_param->pool_handle_id);
+        if(pthread_res != 0)
+        {
+            printf("%s   can't create thread  pthread_res=%d 1111\n",__FUNCTION__,pthread_res);
+            ret= FALSE;
+            pthread_mutex_unlock(&_IPA_POOL_Mutex);
+            return ret;
+        }
+
+        if(pthIPAPollingId < 0)
+        {
+            VPRINTF("CreateTask fail\n");
+            ret= FALSE;
+        }
+        else
+        {
+            //corresponding pthIPAPollingId to pool_handle_id
+            IPAPool_Info[idx].pthIPAPollingId = pthIPAPollingId;
+            IPAPool_Info[idx].polling_callback = polling_param->polling_callback;
+        }
+    }
+    else//already have polling id refer to pool handle id.
+    {
+        ret=FALSE;
+        VPRINTF("pool handle id %u has its polling id %lu ,error,will not set callback again\n",polling_param->pool_handle_id,IPAPool_Info[idx].pthIPAPollingId);
+    }
+
+    pthread_mutex_unlock(&_IPA_POOL_Mutex);
+    return ret;
+}
+#endif

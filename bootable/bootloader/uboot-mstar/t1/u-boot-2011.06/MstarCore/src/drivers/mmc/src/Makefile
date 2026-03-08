@@ -1,0 +1,72 @@
+#
+# (C) Copyright 2000-2006
+# Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+#
+# See file CREDITS for list of people who contributed to this
+# project.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2 of
+# the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+# MA 02111-1307 USA
+#
+include $(TOPDIR)/config.mk
+include $(TOPDIR)/../sboot/.config
+
+CONFIG_MSTAR_CHIP_NAME := $(subst ",,$(CONFIG_MSTAR_CHIP_NAME))
+#CONFIG_MSTAR_CHIP_NAME := amber5
+#CFLAGS += -DET_DEBUG -DDEBUG
+
+LIB	= $(obj)libmmc.a
+
+COBJS =
+
+ifeq ($(CONFIG_MMC),y)
+CFLAGS += -I../inc/common/
+CFLAGS += -I../inc/api/
+CFLAGS += -I../inc/config/
+CPPFLAGS += -I../inc/common/
+CPPFLAGS += -I../inc/api/
+CPPFLAGS += -I../inc/config/
+
+COBJS += ./common/mmc.o
+COBJS += ./common/eMMC_hal_atop.o
+COBJS += ./common/eMMC_hal.o
+COBJS += ./common/eMMC_hal_v5.o
+COBJS += ./common/tSD_hal_v5.o
+COBJS += ./common/eMMC_hal_speed.o
+COBJS += ./common/eMMC_ip_verify.o
+COBJS += ./common/eMMC_utl.o
+COBJS += ./common/eMMC_wp.o
+COBJS += ./common/eMMC_RPMB.o
+COBJS += ./api/eMMC_prg.o
+endif
+
+all:	$(LIB) $(AOBJS)
+
+SRCS	:= $(AOBJS:.o=.S) $(COBJS:.o=.c)
+OBJS	:= $(addprefix $(obj),$(AOBJS) $(COBJS))
+
+all:	$(LIB)
+
+$(LIB): $(obj).depend $(OBJS)
+	$(AR) $(ARFLAGS) $@ $(OBJS)
+
+#########################################################################
+
+# defines $(obj).depend target
+include $(SRCTREE)/rules.mk
+
+sinclude $(obj).depend
+
+#########################################################################

@@ -1,0 +1,95 @@
+#include <stdio.h>
+#include <amzn_secure_boot.h>
+#include <amzn_unlock.h>
+#include <drvGPIO.h>
+#include <drvSYS.h>
+
+#define DEVICE_TYPE_GPIO 45
+
+const char *amzn_target_device_name(void)
+{
+  return "margo";
+}
+
+int amzn_target_device_type(void)
+{
+  int type_gpio_level = mdrv_gpio_get_level(DEVICE_TYPE_GPIO+1);
+  //printf("GPIO%d: %d\n", DEVICE_TYPE_GPIO, type_gpio_level);
+
+  if (type_gpio_level == 1)
+    return AMZN_ENGINEERING_DEVICE;
+  else
+    return AMZN_PRODUCTION_DEVICE;
+}
+
+int amzn_get_unlock_code(unsigned char *code, unsigned int *len)
+{
+  MS_U16 efuse_id[4];
+
+  if (!code || !len || *len < (16 + 1))
+    return -1;
+
+  if (!MDrv_SYS_Init())
+  {
+    printf("MDrv_SYS_Init fail\n");
+    return -1;
+  }
+
+  if (!MDrv_SYS_GetEfuseDid(efuse_id)) // 64 bits, but real value is 48 bits
+  {
+    printf("MDrv_SYS_GetEfuseDid fail\n");
+    return -1;
+  }
+
+  *len = sprintf(code, "%04x%04x%04x%04x",0x0000, efuse_id[2], efuse_id[1], efuse_id[0]);
+  // printf("EFUSE ID %16s, len %d\n", code, *len);
+
+  return 0;
+}
+
+const unsigned char *amzn_get_unlock_key(unsigned int *key_len)
+{
+  static const unsigned char unlock_key[] =
+    "\x30\x82\x01\x22\x30\x0d\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01"
+    "\x01\x05\x00\x03\x82\x01\x0f\x00\x30\x82\x01\x0a\x02\x82\x01\x01"
+    "\x00\xd3\x50\xe7\x58\x25\x79\x12\x9b\x07\xdc\xc9\xd0\xea\xa8\x95"
+    "\x7d\x20\xc7\x5e\x43\xe1\x74\x4a\x2d\xff\xe2\xde\x78\x67\x6e\x49"
+    "\x57\x4f\xcd\xde\x76\x52\xbb\xdd\x2d\xbb\x0e\x46\xc9\x42\x1c\xc1"
+    "\xbf\x22\x3d\x63\x85\x65\xb5\x65\xee\x7b\x76\x7a\x13\xc2\xcc\x71"
+    "\xe6\xe7\x79\x3f\x79\x6f\xd1\x79\x8b\xc0\x7f\x5e\x15\xed\x97\xa6"
+    "\xcb\x4c\x9a\xc7\xc6\x49\x21\x41\x3a\x6c\x3d\xcf\x18\x72\x28\x86"
+    "\x1f\x86\xe4\x74\x90\xed\xd3\x06\x99\x4a\x8a\x22\x8c\x70\xa7\xac"
+    "\x62\x6f\xd8\x76\x72\x1e\xb8\x60\xae\x5d\xeb\x90\x2a\x22\x88\x68"
+    "\xb9\x1f\x28\x38\x2b\xc2\x2f\x78\x4c\xb0\x7d\x8d\x17\xa6\x3a\x71"
+    "\x7a\x10\xf3\xcd\x66\x40\xd3\xa6\xb3\x3d\x43\x48\x2b\x9f\xdd\xa4"
+    "\x4d\x68\x0c\x39\x30\x6b\x6c\x61\x07\xb9\xaf\x74\x05\x30\xa5\xe3"
+    "\x16\x37\xc3\xe5\x11\x8d\x07\xf1\x79\xe2\xb4\x16\x75\x24\xcd\xd9"
+    "\x19\x99\x2e\xc1\xaa\xab\xe3\xf5\xc8\x43\xec\xb6\x85\x06\xef\xfb"
+    "\xf8\xcf\x47\xec\x68\x15\x5d\x31\x45\x52\xe8\x52\x94\xe9\x7e\xc9"
+    "\xb5\xad\x18\x7d\xc4\x28\x0b\x27\x41\x2e\x0e\x13\x12\x24\xb0\xae"
+    "\x15\x8f\x32\x9f\xf2\xc4\xe4\x80\x0e\x10\x0d\x54\xe5\x34\x58\x81"
+    "\x1f\x02\x03\x01\x00\x01"
+    ;
+
+  const int unlock_key_size = sizeof(unlock_key);
+
+  if (!key_len)
+    return NULL;
+
+  *key_len = unlock_key_size;
+
+  return unlock_key;
+}
+
+int amzn_device_is_unlocked(void)
+{
+#if defined(UFBL_FEATURE_UNLOCK)
+  unsigned char signed_code[SIGNED_UNLOCK_CODE_LEN] = { 0 };
+
+  if ( !idme_get_var_external("unlock_code", signed_code, sizeof(signed_code)) &&
+       !amzn_verify_unlock((void*)signed_code, sizeof(signed_code)) ) {
+    return 1;
+  }
+#endif
+  return 0;
+}

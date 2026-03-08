@@ -1,0 +1,185 @@
+/**
+* Copyright (c) 2006 - 2016 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*/
+//******************************************************************************
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//******************************************************************************
+////////////////////////////////////////////////////////////////////////////////
+//
+//
+////////////////////////////////////////////////////////////////////////////////
+
+#ifndef _DRVAESDMA_PRIV_H_
+#define _DRVAESDMA_PRIV_H_
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#include "MsTypes.h"
+#include "drvAESDMA.h"
+
+
+typedef MS_U32 (*IOCTL_AESDMA_INIT)(MS_PHY, MS_PHY, MS_U32);
+typedef MS_U32 (*IOCTL_AESDMA_SETIV)(MS_U32 *);
+typedef MS_U32 (*IOCTL_AESDMA_RESET)(void);
+typedef MS_U32 (*IOCTL_AESDMA_SETFILEINOUT)(MS_PHY, MS_U32, MS_PHY, MS_PHY);
+typedef MS_U32 (*IOCTL_AESDMA_SETKEY)(MS_U32 *);
+typedef MS_U32 (*IOCTL_AESDMA_SELENG)(DrvAESDMA_CipherMode, MS_BOOL);
+typedef MS_U32 (*IOCTL_AESDMA_START)(MS_BOOL);
+typedef MS_U32 (*IOCTL_AESDMA_GETSTATUS)(MS_U32 *);
+typedef MS_U32 (*IOCTL_AESDMA_ISFINISHED)(MS_U32 *);
+typedef MS_U32 (*IOCTL_AESDMA_SETCLK)(MS_BOOL);
+typedef MS_U32 (*IOCTL_AESDMA_SETSECUREKEY)(void);
+typedef MS_U32 (*IOCTL_AESDMA_SETPS)(MS_U32, MS_U32, MS_BOOL, MS_BOOL);
+typedef MS_U32 (*IOCTL_AESDMA_PSRELEASE)(void);
+typedef MS_U32 (*IOCTL_AESDMA_GETPSMATCHEDBYTECNT)(MS_U32 *);
+typedef MS_U32 (*IOCTL_AESDMA_GETPSMATCHEDPTN)(void);
+typedef MS_U32 (*IOCTL_AESDMA_NOTIFY)(DrvAESDMA_Event, P_DrvAESDMA_EvtCallback);
+typedef MS_U32 (*IOCTL_AESDMA_RAND)(MS_U32 *, MS_U32);
+typedef MS_U32 (*IOCTL_AESDMA_GET_RAND_NUM)(MS_U8 *);
+typedef MS_U32 (*IOCTL_RSA_CALCULATE)(DrvAESDMA_RSASig *, DrvAESDMA_RSAKey *, DrvAESDMA_RSAMode);
+typedef MS_U32 (*IOCTL_RSA_ISFINISHED)(void);
+typedef MS_U32 (*IOCTL_RSA_OUTPUT)(DrvAESDMA_RSAMode, DrvAESDMA_RSAOut *);
+typedef MS_U32 (*IOCTL_SHA_CALCULATE)(DrvAESDMA_SHAMode, MS_PHY, MS_U32, MS_PHY);
+typedef MS_U32 (*IOCTL_SHA_CALCULATE_MANUAL)(DrvAESDMA_HASHCFG, DrvAESDMA_HASH_STAGE, MS_U32, MS_U8 *);
+typedef MS_U32 (*IOCTL_AESDMA_PARSER_MASKSCRMB)(MS_BOOL);
+typedef MS_U32 (*IOCTL_AESDMA_PARSER_SETSCRMBPATTERN)(DrvAESDMA_ScrmbPattern);
+typedef MS_U32 (*IOCTL_AESDMA_PARSER_SETADDEDSCRMBPATTERN)(DrvAESDMA_ScrmbPattern);
+typedef MS_U32 (*IOCTL_AESDMA_PARSER_BYPASSPID)(MS_BOOL);
+typedef MS_U32 (*IOCTL_AESDMA_PARSER_SETPID)(MS_U8, MS_U16);
+typedef MS_U32 (*IOCTL_AESDMA_PARSER_ENCRYPT)(DrvAESDMA_ParserMode);
+typedef MS_U32 (*IOCTL_AESDMA_PARSER_DECRYPT)(DrvAESDMA_ParserMode);
+typedef MS_U8  (*IOCTL_AESDMA_QUERYPIDCOUNT)(MS_U8 *);
+typedef MS_U32 (*IOCTL_AESDMA_SETKEYSEL)(MS_U32 *pCipherKey, DrvAESDMA_KEY_TYPE stKeyType);
+typedef MS_U32 (*IOCTL_AESDMA_SETODDIV)(MS_U32 *pInitVector);
+typedef MS_U32 (*IOCTL_IS_SECRETKEYINNORMALBLANK)(MS_U8 *);
+
+typedef MS_U32 (*IOCTL_HDCP_PROCESSCIPHER)(MS_U8 , MS_U8*, MS_U8*);
+
+typedef MS_U32 (*IOCTL_HDCP_GETHDCPCIPHERSTATE)(MS_U8 , MS_U8*);
+
+typedef struct _AESDMA_RESOURCE_PRIVATE
+{
+    MS_U32 AES_Dummy;
+}AESDMA_RESOURCE_PRIVATE;
+
+typedef struct _SHA_RESOURCE_PRIVATE
+{
+    MS_U32 SHA_Dummy;
+}SHA_RESOURCE_PRIVATE;
+
+typedef struct _RSA_RESOURCE_PRIVATE
+{
+    MS_U32 RSA_Dummy;
+}RSA_RESOURCE_PRIVATE;
+
+typedef struct _AESDMA_RESOURCE_SHARED
+{
+    void* pAESResource;
+}AESDMA_RESOURCE_SHARED;
+
+typedef struct _RSA_RESOURCE_SHARED
+{
+    void* pRSAResource;
+}RSA_RESOURCE_SHARED;
+
+typedef struct _AESDMA_INSTANT_PRIVATE
+{
+    MS_U8                              InitVector[16];
+    MS_PHY                             u32FileinAddr;
+    MS_U32                             u32FileInNum;
+    MS_PHY                             u32FileOutSAddr;
+    MS_PHY                             u32FileOutEAddr;
+    MS_U8                              CipherKey[16];
+    DrvAESDMA_CipherMode               eMode;
+    MS_BOOL                            bDescrypt;
+    MS_BOOL                            bSecretKey;
+    IOCTL_AESDMA_INIT                  fpAESDMAInit;
+    IOCTL_AESDMA_SETIV                 fpAESDMASetIV;
+    IOCTL_AESDMA_RESET                 fpAESDMAReset;
+    IOCTL_AESDMA_SETFILEINOUT          fpAESDMASetFileInOut;
+    IOCTL_AESDMA_SETKEY                fpAESDMASetKey;
+    IOCTL_AESDMA_SELENG                fpAESDMASelEng;
+    IOCTL_AESDMA_START                 fpAESDMAStart;
+    IOCTL_AESDMA_GETSTATUS             fpAESDMAGetStatus;
+    IOCTL_AESDMA_ISFINISHED            fpAESDMAIsFinished;
+    IOCTL_AESDMA_SETCLK                fpAESDMASetClk;
+    IOCTL_AESDMA_SETSECUREKEY          fpAESDMASetSecureKey;
+    IOCTL_AESDMA_SETPS                 fpAESDMASetPS;
+    IOCTL_AESDMA_PSRELEASE             fpAESDMAPSRelease;
+    IOCTL_AESDMA_GETPSMATCHEDBYTECNT   fpAESDMAGetPSMatchedByteCNT;
+    IOCTL_AESDMA_GETPSMATCHEDPTN       fpAESDMAGetPSMatchedPTN;
+    IOCTL_AESDMA_NOTIFY                fpAESDMANotify;
+    IOCTL_AESDMA_RAND                  fpAESDMARand;
+    IOCTL_AESDMA_GET_RAND_NUM          fpAESDMAGetRandNum;
+    IOCTL_RSA_CALCULATE                fpRSACalculate;
+    IOCTL_RSA_ISFINISHED               fpRSAIsFinished;
+    IOCTL_RSA_OUTPUT                   fpRSAOutput;
+    IOCTL_SHA_CALCULATE                fpSHACalculate;
+    IOCTL_SHA_CALCULATE_MANUAL         fpSHACalculateManual;
+
+    DrvAESDMA_ScrmbPattern             eScrmbPattern;
+    DrvAESDMA_ScrmbPattern             eAddedScrmbPattern;
+    DrvAESDMA_ParserMode               eParserMode;
+    MS_BOOL                            bParserDecrypt;
+    MS_BOOL                            bMaskScrmb;
+    MS_BOOL                            bBypassPid;
+    MS_U8                              u8PidIndex;    //1st PID, 0x122C_01
+    MS_U32                             u16Pid;        //1st PID, 0x122C_01
+
+    IOCTL_AESDMA_PARSER_MASKSCRMB       fpAESDMAParserMaskscrmb;
+    IOCTL_AESDMA_PARSER_SETSCRMBPATTERN fpAESDMAParserSetScrmbPatten;
+    IOCTL_AESDMA_PARSER_BYPASSPID       fpAESDMAParserBypassPid;
+    IOCTL_AESDMA_PARSER_SETPID          fpAESDMAParserSetPid;
+    IOCTL_AESDMA_PARSER_ENCRYPT         fpAESDMAParserEncrypt;
+    IOCTL_AESDMA_PARSER_DECRYPT         fpAESDMAParserDecrypt;
+    IOCTL_AESDMA_QUERYPIDCOUNT          fpAESDMAParserQueryPidCount;
+    IOCTL_AESDMA_PARSER_SETADDEDSCRMBPATTERN fpAESDMAParserSetAddedScrmbPattern;
+    MS_BOOL                            bEnableTwoKey;
+    MS_U8                              InitVectorOdd[16];
+    MS_U8                              CipherOddKey[16];
+    IOCTL_AESDMA_SETKEYSEL             fpAESDMASetKeySel;
+    IOCTL_AESDMA_SETODDIV              fpAESDMASetOddIv;
+    MS_U8                              u8PidIndex1;    //2nd PID, 0x122C_02
+    MS_U32                             u16Pid1;        //2nd PID, 0x122C_02
+    IOCTL_IS_SECRETKEYINNORMALBLANK    fpAESDMAIsSecretKeyInNormalBlank;
+    IOCTL_HDCP_PROCESSCIPHER           fpHDCPHDCPProcessCipher;
+
+    IOCTL_AESDMA_RESET                 fpAESDMANormalReset;
+    MS_BOOL                            bEvenScrmbPatternEn;
+    MS_BOOL                            bOddScrmbPatternEn;
+    IOCTL_HDCP_GETHDCPCIPHERSTATE      fpGetHDCPCipherState;
+    MS_BOOL                            bSetEng;
+    MS_BOOL                            bSetKey;
+    MS_BOOL                            bSetIV;
+    MS_BOOL                            bHwParserEn;
+    MS_BOOL                            bPid0En;
+    MS_BOOL                            bPid1En;
+    MS_BOOL                            bMaskScrmbEn;
+}AESDMA_INSTANT_PRIVATE;
+
+void AESDMARegisterToUtopia(FUtopiaOpen ModuleType);
+MS_U32 AESDMAOpen(void** pInstantTmp, MS_U32 u32ModuleVersion, void* pAttribute);
+MS_U32 AESDMAClose(void* pInstantTmp);
+MS_U32 AESDMAIoctl(void* pInstantTmp, MS_U32 u32Cmd, void* pArgs);
+MS_U32 AESDMAStr(MS_U32 u32PowerState, void* pModule);
+
+#ifdef __cplusplus
+}
+#endif
+#endif // _DRVAESDMA_PRIV_H_

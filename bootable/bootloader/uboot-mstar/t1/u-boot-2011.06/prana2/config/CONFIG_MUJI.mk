@@ -1,0 +1,13 @@
+CC_TVOPTS += -DCHIP_FAMILY_TYPE=CHIP_FAMILY_MUJI
+
+ifeq ($(PLATFORM),MBoot)
+CC_TVOPTS += -DMBOOT
+endif
+
+PRANA_SRC += \
+	$(ROOT)/driver/core/device.c                    \
+	$(ROOT)/driver/riu/drvGlobal.c
+
+INC_DIR   += \
+	-I$(ROOT)/driver
+

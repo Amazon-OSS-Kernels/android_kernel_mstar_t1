@@ -1,0 +1,99 @@
+/*
+ * Automatically generated C config: don't edit
+ * Utopia Configuration
+ */
+#ifndef _AUTOCONF_H_
+#define _AUTOCONF_H_
+
+#define CONFIG_API_NJPEG_EX 1
+#define CONFIG_DRV_PWS 1
+#define CONFIG_DRV_VE 1
+#define CONFIG_TOOLCHAIN "arm-none-eabi"
+#define CONFIG_UTOPIA_FRAMEWORK 1
+#define CONFIG_BLT_TYPE "retail"
+#define CONFIG_API_XC 1
+#define CONFIG_GOP_SCROLL 1
+#define CONFIG_DRV_UART 1
+#define CONFIG_LIB 1
+#define CONFIG_GOP_CONTRAST 1
+#define CONFIG_NON_BLOCK 1
+#define CONFIG_API_ACE 1
+#define CONFIG_DRV_IRQ 1
+#define CONFIG_GOP_2ND_PAL 1
+#define CONFIG_GOP_FADE 1
+#define CONFIG_DRV_AESDMA 1
+#define CONFIG_STATIC 1
+#define CONFIG_UTOPIAXP_CONF_PATH "/applications/utopia.conf"
+#define CONFIG_GOP_BG 1
+#define CONFIG_DRV_HWI2C 1
+#define CONFIG_ARM_CA7 1
+#define CONFIG_CHIP "maserati"
+#define CONFIG_FPU "soft"
+#define CONFIG_GOP_VE_CAPTURE 1
+#define CONFIG_DRV_AUDSP 1
+#define CONFIG_GFX_TRAPZOID 1
+#define CONFIG_DRV_VIF 1
+#define CONFIG_DRV_AVD 1
+#define CONFIG_MASERATI 1
+#define CONFIG_DRV_MIU 1
+#define CONFIG_DRV_DDC2BI 1
+#define CONFIG_SOFT 1
+#define CONFIG_GFX_TEXTOUT 1
+#define CONFIG_DRV_IR 1
+#define CONFIG_LEVEL_5 1
+#define CONFIG_LINK_TYPE "static"
+#define CONFIG_MBOOT 1
+#define CONFIG_MCU_TYPE "arm_ca7"
+#define CONFIG_MSOS 1
+#define CONFIG_KERN_VER "3.1.10"
+#define CONFIG_DRV_RTC 1
+#define CONFIG_DRV_WDT 1
+#define CONFIG_DRV_DEMOD 1
+#define CONFIG_NOS 1
+#define CONFIG_GOP_TEST_PATTERN 1
+#define CONFIG_DRV_URDMA 1
+#define CONFIG_API_PNL 1
+#define CONFIG_DRV_SAR 1
+#define CONFIG_API_SWI2C 1
+#define CONFIG_GOP_GWIN_MISC 1
+#define CONFIG_API_GPD 1
+#define CONFIG_GOP_YUV_SWAP 1
+#define CONFIG_MAKE_TYPE "lib"
+#define CONFIG_EXT_PLATFORM_FLAG "mboot"
+#define CONFIG_DONT_USE_CMA 1
+#define CONFIG_KERN_3_1_10 1
+#define CONFIG_API_CEC 1
+#define CONFIG_GOP_POOL_ARRANGE 1
+#define CONFIG_DRV_PM 1
+#define CONFIG_FW_TYPE "external"
+#define CONFIG_DSCMB_CSA_ENABLE 1
+#define CONFIG_DEBUG_LEVEL "5"
+#define CONFIG_ENDIAN "mlittle-endian"
+#define CONFIG_DRV_MVOP 1
+#define CONFIG_DRV_FLASH 1
+#define CONFIG_DRV_BDMA 1
+#define CONFIG_API_MFE_EX 1
+#define CONFIG_DRV_MBX 1
+#define CONFIG_ASSERT_TYPE "non_block"
+#define CONFIG_API_DLC 1
+#define CONFIG_DRV_MMIO 1
+#define CONFIG_API_AUDIO 1
+#define CONFIG_DRV_CPU 1
+#define CONFIG_DRV_PWM 1
+#define CONFIG_DRV_MFE_EX 1
+#define CONFIG_DRV_DSCMB 1
+#define CONFIG_API_GFX 1
+#define CONFIG_API_HSL 1
+#define CONFIG_DRV_SYS 1
+#define CONFIG_OS_TYPE "nos"
+#define CONFIG_API_MHL 1
+#define CONFIG_DRV_SERIAL_FLASH 1
+#define CONFIG_RETAIL 1
+#define CONFIG_FW_TYPE_EXTERNAL 1
+#define CONFIG_API_GOP 1
+#define CONFIG_DRV_AUDIO 1
+#define CONFIG_DSCMB_MULTI2_ENABLE 1
+#define CONFIG_DRV_SEM 1
+#define CONFIG_DRV_GPIO 1
+
+#endif

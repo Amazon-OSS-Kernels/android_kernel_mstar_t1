@@ -1,0 +1,39 @@
+#
+# Utopia framework configuration
+#
+
+menu "Utoipa framework"
+
+config UTOPIA_TEE
+	bool "Flag of CONFIG_UTOPIA_TEE"
+	default n
+
+config UTOPIA_FRAMEWORK
+	bool "Support for utopia framework"
+	default n
+if UTOPIA_FRAMEWORK
+    config UTOPIA_FRAMEWORK_KERNEL_DRIVER
+    bool "Support for utopia2k framework"
+	default n
+
+	config UTOPIA_FRAMEWORK_KERNEL_DRIVER_64BIT
+    bool "Support for utopia2k 64bit framework"
+	default n
+
+	config UTOPIA_FRAMEWORK_KERNEL_DRIVER_STRUCT_PACKED
+    bool "Support struct packed"
+	default n
+
+	config UTOPIA_FRAMEWORK_DISABLE_SYSTEM_V_IPCS
+	bool "Disable System V IPCs"
+	default n
+
+	config UTOPIAXP_PATCH
+    bool "Enable utopia XP hard-cored patch"
+	default n
+
+	config UTOPIAXP_CONF_PATH
+	string "Default path for utopia.conf"
+	default "/applications/utopia.conf"
+endif
+endmenu

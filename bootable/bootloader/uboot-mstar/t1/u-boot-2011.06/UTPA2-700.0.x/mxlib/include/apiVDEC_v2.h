@@ -1,0 +1,185 @@
+/**
+* Copyright (c) 2006 - 2016 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*/
+//******************************************************************************
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//******************************************************************************
+
+#ifndef _VDEC_V2_H_
+#define _VDEC_V2_H_
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+
+
+typedef enum
+{
+    //E_VDEC_V2_CMD_GET_FREE_STREAM_ID,
+
+    E_VDEC_V2_CMD_GETLIBVER = 0,
+    E_VDEC_V2_CMD_GETINFO,
+    E_VDEC_V2_CMD_GETSTATUS,
+    E_VDEC_V2_CMD_CHECKCAPS,
+    E_VDEC_V2_CMD_ENABLETUEBOMODE,
+    E_VDEC_V2_CMD_INIT,
+    E_VDEC_V2_CMD_INIT_EX,
+    E_VDEC_V2_CMD_SET_CONTROL,
+    E_VDEC_V2_CMD_GET_CONTROL,
+    E_VDEC_V2_CMD_PRE_SET_CONTROL,
+    E_VDEC_V2_CMD_POST_SET_CONTROL,
+    E_VDEC_V2_CMD_RST,
+    E_VDEC_V2_CMD_EXIT,
+    E_VDEC_V2_CMD_CHECK_DISP_INFO_RDY,
+    E_VDEC_V2_CMD_SET_FRC_MODE,
+    E_VDEC_V2_CMD_SET_DYNSCALING_PARAMS,
+    E_VDEC_V2_CMD_PLAY,
+    E_VDEC_V2_CMD_PAUSE,
+    E_VDEC_V2_CMD_RESUME,
+    E_VDEC_V2_CMD_STEP_DISP,
+    E_VDEC_V2_CMD_IS_STEP_DISP_DONE,
+    E_VDEC_V2_CMD_SEEK_TO_PTS,
+    E_VDEC_V2_CMD_SKIP_TO_PTS,
+    E_VDEC_V2_CMD_STEP_DECODE,
+    E_VDEC_V2_CMD_IS_STEP_DECODE_DONE,
+    E_VDEC_V2_CMD_SET_TRICK_MODE,
+    E_VDEC_V2_CMD_PUSH_DECQ,
+    E_VDEC_V2_CMD_FIRE_DEC_CMD,
+    E_VDEC_V2_CMD_GET_DECQ_VACANCY,
+    E_VDEC_V2_CMD_IS_CC_AVAILABLE,
+    E_VDEC_V2_CMD_GET_CC_INFO,
+    E_VDEC_V2_CMD_FLUSH,
+    E_VDEC_V2_CMD_GET_ES_WRITE_PTR,
+    E_VDEC_V2_CMD_GET_ES_READ_PTR,
+    E_VDEC_V2_CMD_ENABLE_LAST_FRAME_SHOW,
+    E_VDEC_V2_CMD_IS_DISP_FINISH,
+    E_VDEC_V2_CMD_SET_SPEED,
+    E_VDEC_V2_CMD_IS_FRAME_RDY,
+    E_VDEC_V2_CMD_SET_FREEZE_DISP,
+    E_VDEC_V2_CMD_SET_BLUE_SCREEN,
+    E_VDEC_V2_CMD_RESET_PTS,
+    E_VDEC_V2_CMD_AVSYNC_ON,
+    E_VDEC_V2_CMD_SET_AVSYNC_FREERUN_THRESHOLD,
+    E_VDEC_V2_CMD_IS_AVSYNC_ON,
+    E_VDEC_V2_CMD_GET_PTS,
+    E_VDEC_V2_CMD_GET_NEXT_PTS,
+    E_VDEC_V2_CMD_IS_START_SYNC,
+    E_VDEC_V2_CMD_IS_REACH_SYNC,
+    E_VDEC_V2_CMD_IS_FREERUN,
+    E_VDEC_V2_CMD_MHEG_DECODE_I_FRAME,
+    E_VDEC_V2_CMD_MHEG_IS_I_FRAME_DECODING,
+    E_VDEC_V2_CMD_MHEG_RST_I_FRAME_DEC,
+    E_VDEC_V2_CMD_GET_ERR_CODE,
+    E_VDEC_V2_CMD_GET_ERR_CNT,
+    E_VDEC_V2_CMD_GET_ACTIVE_CODEC_TYPE,
+    E_VDEC_V2_CMD_GET_BITS_RATE,
+    E_VDEC_V2_CMD_IS_32PULLDOWN,
+    E_VDEC_V2_CMD_IS_ALIVE,
+    E_VDEC_V2_CMD_GET_VIDEO_PTS_STC_DELTA,
+    E_VDEC_V2_CMD_IS_WITH_VALID_STREAM,
+    E_VDEC_V2_CMD_IS_I_FRAME_FOUND,
+    E_VDEC_V2_CMD_IS_WITH_LOW_DELAY,
+    E_VDEC_V2_CMD_IS_ALL_BUFFER_EMPTY,
+    E_VDEC_V2_CMD_GET_GOP_CNT,
+    E_VDEC_V2_CMD_GET_FRAME_CNT,
+    E_VDEC_V2_CMD_GET_SKIP_CNT,
+    E_VDEC_V2_CMD_GET_DROP_CNT,
+    E_VDEC_V2_CMD_GET_DISP_INFO,
+    E_VDEC_V2_CMD_GET_TRICK_MODE,
+    E_VDEC_V2_CMD_GET_ACTIVE_FORMAT,
+    E_VDEC_V2_CMD_GET_COLOUR_PRIMARIES,
+    E_VDEC_V2_CMD_GET_HW_KEY,
+    E_VDEC_V2_CMD_IS_SEQ_CHG,
+    E_VDEC_V2_CMD_SET_DBG_LEVEL,
+    E_VDEC_V2_CMD_GET_DEC_FRAME_INFO,
+    E_VDEC_V2_CMD_GET_DISP_FRAME_INFO,
+    E_VDEC_V2_CMD_GET_EXT_DISP_INFO,
+    E_VDEC_V2_CMD_GET_DEC_TIME_CODE,
+    E_VDEC_V2_CMD_GET_DISP_TIME_CODE,
+    E_VDEC_V2_CMD_CC_STARTPARSING,
+    E_VDEC_V2_CMD_CC_STOPPARSING,
+    E_VDEC_V2_CMD_CC_GETWRITEPTR,
+    E_VDEC_V2_CMD_CC_GETREADPTR,
+    E_VDEC_V2_CMD_CC_UPDATEREADPTR,
+    E_VDEC_V2_CMD_CC_GETISOVERFLOW,
+    E_VDEC_V2_CMD_SETEVENT,
+    E_VDEC_V2_CMD_UNSETEVENT,
+    E_VDEC_V2_CMD_SETENVENT_EX,
+    E_VDEC_V2_CMD_UNSETEVENT_EX,
+    E_VDEC_V2_CMD_GETEVENTINFO,
+    E_VDEC_V2_CMD_GENPATTERN,
+    E_VDEC_V2_CMD_GENPATTERNLEASTLENGTH,
+    E_VDEC_V2_CMD_DISABLEDEBLOCKING,
+    E_VDEC_V2_CMD_DISABLEQUARTERPIXEL,
+    E_VDEC_V2_CMD_SETAUTORMLSTZEROBYTE,
+    E_VDEC_V2_CMD_SETBALANCEBW,
+    E_VDEC_V2_CMD_DBGDUMPSTATUS,
+    E_VDEC_V2_CMD_SETCONTROL,
+    E_VDEC_V2_CMD_GETCONTROL,
+    E_VDEC_V2_CMD_GETDISPCNT,
+    E_VDEC_V2_CMD_GETFWVERSION,
+    E_VDEC_V2_CMD_SETBLOCKDISPLAY,
+    E_VDEC_V2_CMD_ENABLEESBUFFMALLOC,
+    E_VDEC_V2_CMD_GETESBUFFVACANCY,
+    E_VDEC_V2_CMD_GETESBUFF,
+    E_VDEC_V2_CMD_GETNEXTDISPFRAME,
+    E_VDEC_V2_CMD_DISPLAYFRAME,
+    E_VDEC_V2_CMD_RELEASEFRAME,
+    E_VDEC_V2_CMD_FLUSHPTSBUF,
+    E_VDEC_V2_CMD_CAPTUREFRAME,
+    E_VDEC_V2_CMD_CC_INIT,
+    E_VDEC_V2_CMD_CC_SETCFG,
+    E_VDEC_V2_CMD_CC_SETBUFFSTARTADD,
+    E_VDEC_V2_CMD_CC_UPDATEWRITEADD,
+    E_VDEC_V2_CMD_CC_UPDATEREADADD,
+    E_VDEC_V2_CMD_CC_DISABLEPARSING,
+    E_VDEC_V2_CMD_CC_GETINFO,
+    E_VDEC_V2_CMD_CC_GETISRSTDONE,
+    E_VDEC_V2_CMD_CC_GETISBUFFOVERFLOW,
+    E_VDEC_V2_CMD_CC_GETWRITEADD,
+    E_VDEC_V2_CMD_CC_GETREADADD,
+    E_VDEC_V2_CMD_SYSTEMPRESETCONTROL,
+    E_VDEC_V2_CMD_PRESETCONTROL,
+
+    E_VDEC_V2_CMD_NUM,
+    E_VDEC_V2_CMD_MAX = E_VDEC_V2_CMD_NUM,
+} E_VDEC_V2_IOCTL_CMD;
+
+
+//-------------------------------------------------------------------------------------------------
+//  API for Upper layer
+//-------------------------------------------------------------------------------------------------
+
+void VDEC_V2_RegisterToUtopia(void);
+MS_U32 VDEC_V2_Open(void** ppInstance, MS_U32 u32ModuleVersion, void* pAttribute);
+MS_U32 VDEC_V2_Close(void* pInstance);
+MS_U32 VDEC_V2_Ioctl(void* pInstance, MS_U32 u32Cmd, void* pArgs);
+
+typedef struct
+{
+    VDEC_User_Cmd eUserCmd;
+    void* param[8];  // at most 8 param
+    void* pRet;//johnny.ko
+}VDEC_V2_IO_Param;
+
+#ifdef __cplusplus
+}
+#endif
+
+#undef _VDEC_V2_H_
+#endif //_VDEC_V2_H_

@@ -1,0 +1,123 @@
+/**
+* Copyright (c) 2006 – 2016 MStar Semiconductor, Inc.
+* This program is free software. You can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*/
+
+#ifndef __CUS_BOOT_H__
+#define __CUS_BOOT_H__
+
+#ifndef  CUS_IR_HEAD_FILE//Please define it in board file for customization
+#include "IR_MSTAR_DTV.h"
+#else
+#include CUS_IR_HEAD_FILE
+#endif
+
+#if (ENABLE_MODULE_BOOT_IR == 1)
+#if (EANBLE_Customer)
+#if (ENABLE_CUS18)
+#define IR_RECOVERY_KEY             IRKEY_MENU
+#define IR_UPGRADEBOOTLOADER_KEY    IRKEY_EXIT
+#define IR_FORCEUGRADE_KEY          IRKEY_HOME
+#define IR_UPGRADEUSBOTA_KEY        IRKEY_VOLUME_PLUS
+#define IR_RECOVERYWIPEDATA_KEY     IRKEY_CHANNEL_PLUS
+#define IR_RECOVERYWIPECACHE_KEY    IRKEY_CHANNEL_MINUS
+#elif (ENABLE_CUS19)
+#define IR_RECOVERY_KEY             IRKEY_RESERVE0
+#define IR_UPGRADEBOOTLOADER_KEY    IRKEY_RESERVE1
+#define IR_FORCEUGRADE_KEY          IRKEY_RESERVE2
+#define IR_UPGRADEUSBOTA_KEY        IRKEY_RESERVE3
+#define IR_RECOVERYWIPEDATA_KEY     IRKEY_RESERVE4
+#define IR_RECOVERYWIPECACHE_KEY    IRKEY_RESERVE5
+#elif (ENABLE_CUS23)
+#define IR_RECOVERY_KEY             IRKEY_EXIT
+#define IR_UPGRADEBOOTLOADER_KEY    IRKEY_VOLUME_PLUS
+#define IR_FORCEUGRADE_KEY          IRKEY_MENU
+#elif (ENABLE_CUS28)
+#define IR_RECOVERY_KEY             IRKEY_INPUT_SOURCE
+#define IR_UPGRADEBOOTLOADER_KEY    IRKEY_VOLUME_MINUS
+#define IR_FORCEUGRADE_KEY          IRKEY_POWER
+#else
+#define IR_RECOVERY_KEY             IRKEY_EXIT
+#define IR_UPGRADEUSBOTA_KEY        IRKEY_MENU
+#define IR_UPGRADEBOOTLOADER_KEY    IRKEY_VOLUME_MINUS
+#define IR_FORCEUGRADE_KEY          IRKEY_VOLUME_PLUS
+#define IR_RECOVERYWIPEDATA_KEY     IRKEY_CHANNEL_PLUS
+#define IR_RECOVERYWIPECACHE_KEY    IRKEY_CHANNEL_MINUS
+#endif
+#else
+#define IR_RECOVERY_KEY             IRKEY_EXIT
+#define IR_UPGRADEUSBOTA_KEY        IRKEY_MENU
+#define IR_UPGRADEBOOTLOADER_KEY    IRKEY_VOLUME_MINUS
+#define IR_FORCEUGRADE_KEY          IRKEY_VOLUME_PLUS
+#define IR_RECOVERYWIPEDATA_KEY     IRKEY_CHANNEL_PLUS
+#define IR_RECOVERYWIPECACHE_KEY    IRKEY_CHANNEL_MINUS
+#if defined (CONFIG_AN_FASTBOOT_ENABLE)
+#define IR_FASTBOOT_KEY             IRKEY_SELECT
+#endif
+#endif
+
+#if CONFIG_RESCUE_ENV
+#define IR_BRICK_TERMINATOR_RECOVERY_KEY1             IRKEY_RED
+#define IR_BRICK_TERMINATOR_RECOVERY_KEY2             IRKEY_GREEN
+#define IR_BRICK_TERMINATOR_RECOVERY_KEY_REPEAT_REQUIRED 4
+#endif
+
+#if CONFIG_SEC_SYSTEM
+#define IR_SECOND_SYSTEM_KEY       IRKEY_YELLOW
+#endif
+#endif
+
+
+#if (ENABLE_MODULE_BOOT_KEYPAD == 1)
+#if (ENABLE_Customer)
+#if (ENABLE_CUS18)
+#define KEYPAD_RECOVERY_KEY             IRKEY_INPUT_SOURCE
+#define KEYPAD_UPGRADEBOOTLOADER_KEY    IRKEY_MENU
+#define KEYPAD_FORCEUGRADE_KEY          IRKEY_KEYPAD_VOLUME_PLUS //HIS USB Update
+#define KEYPAD_UART_DEBUG_KEY		    IRKEY_VOLUME_MINUS
+#elif (ENABLE_CUS19)
+#define KEYPAD_RECOVERY_KEY             IRKEY_RESERVE0
+#define KEYPAD_UPGRADEBOOTLOADER_KEY    IRKEY_RESERVE1
+#define KEYPAD_FORCEUGRADE_KEY          IRKEY_POWER
+#define KEYPAD_UART_DEBUG_KEY			IRKEY_RESERVE2
+#elif (ENABLE_CUS23)
+#define KEYPAD_RECOVERY_KEY             IRKEY_INPUT_SOURCE
+#define KEYPAD_UPGRADEBOOTLOADER_KEY    IRKEY_VOLUME_PLUS
+#define KEYPAD_FORCEUGRADE_KEY          IRKEY_MENU
+#define KEYPAD_UART_DEBUG_KEY			IRKEY_VOLUME_MINUS
+#elif (ENABLE_CUS28)
+#define KEYPAD_RECOVERY_KEY             IRKEY_INPUT_SOURCE
+#define KEYPAD_UPGRADEBOOTLOADER_KEY    IRKEY_VOLUME_MINUS
+#define KEYPAD_FORCEUGRADE_KEY          IRKEY_POWER
+#define KEYPAD_UART_DEBUG_KEY			IRKEY_MENU
+#else
+#define KEYPAD_RECOVERY_KEY             IRKEY_INPUT_SOURCE
+#define KEYPAD_UPGRADEBOOTLOADER_KEY    IRKEY_MENU
+#define KEYPAD_FORCEUGRADE_KEY          IRKEY_VOLUME_PLUS
+#define KEYPAD_UART_DEBUG_KEY			IRKEY_VOLUME_MINUS
+#if (ENABLE_MODULE_SYSTEM_RESTORE == 1)
+#define KEYPAD_SYSTEM_RESTORE_KEY		IRKEY_CHANNEL_MINUS
+#endif
+#endif
+#else
+#define KEYPAD_RECOVERY_KEY             IRKEY_INPUT_SOURCE
+#define KEYPAD_UPGRADEBOOTLOADER_KEY    IRKEY_MENU
+#define KEYPAD_FORCEUGRADE_KEY          IRKEY_VOLUME_PLUS
+#define KEYPAD_HOLD_VALUE               1100  // 1100 -> 1.1 seconds
+#define KEYPAD_UART_DEBUG_KEY			IRKEY_VOLUME_MINUS
+#if (ENABLE_MODULE_SYSTEM_RESTORE == 1)
+#define KEYPAD_SYSTEM_RESTORE_KEY		IRKEY_CHANNEL_MINUS
+#endif
+#if defined (CONFIG_AN_FASTBOOT_ENABLE)
+#define KEYPAD_FASTBOOT_KEY             IRKEY_CHANNEL_PLUS
+#endif
+#endif
+#endif
+
+
+#endif
+
