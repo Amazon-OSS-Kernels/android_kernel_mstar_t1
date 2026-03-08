@@ -1,0 +1,394 @@
+#include <linux/init.h>
+#include <linux/kernel.h>
+#include <linux/list.h>
+#include <linux/smp.h>
+#include <linux/cpumask.h>
+#include <linux/io.h>
+#include <linux/cpu_pm.h>
+
+#include <linux/irqchip/chained_irq.h>
+
+#include <asm/irq.h>
+#include <asm/hardirq.h>
+#include <linux/irq.h>
+#include <mach/hardware.h>
+#include <chip_int.h>
+#include <chip_setup.h>
+#include <mstar/mpatch_macro.h>
+
+static DEFINE_SPINLOCK(irq_controller_lock);
+
+#define VIRTUAL_FIQ_START 128
+#define VIRTUAL_IRQ_START (VIRTUAL_FIQ_START + FIQ_NUMBER)
+
+#if (MP_PLATFORM_FIQ_IRQ_HYP == 1)
+#define VIRTUAL_FIQ_HYP_START (VIRTUAL_IRQ_START + IRQ_NUMBER)
+#define VIRTUAL_IRQ_HYP_START (VIRTUAL_FIQ_HYP_START + FIQ_HYP_NUMBER)
+#endif
+
+#define IRQ_NUMBER 64
+#define FIQ_NUMBER 64
+
+#if (MP_PLATFORM_FIQ_IRQ_HYP == 1)
+#define IRQ_HYP_NUMBER	64
+#define FIQ_HYP_NUMBER	64
+#endif
+
+extern void chip_irq_ack(unsigned int irq);
+extern void chip_irq_mask(unsigned int irq);
+extern void chip_irq_unmask(unsigned int irq);
+extern ptrdiff_t mstar_pm_base;
+
+#ifdef CONFIG_MP_INTR_ERROR_CHECK_DIE
+
+#define INTR_REC_L 0xC18
+#define INTR_REC_H 0xC1C
+
+void set_intr_num(unsigned int eIntNum)
+{
+	ptrdiff_t riu_addr;
+	unsigned int bank_off, byte_off;
+	unsigned cpuid = smp_processor_id();
+	unsigned int IntrMap = 0;
+
+	if (cpuid <= 1)
+		bank_off = INTR_REC_L;
+	else
+		bank_off = INTR_REC_H;
+
+	byte_off = cpuid % 2;
+	riu_addr = mstar_pm_base + bank_off + byte_off;
+
+	if (eIntNum >= MSTAR_FIQ_BASE)
+		IntrMap = eIntNum - MSTAR_FIQ_BASE;
+	else
+		IntrMap = eIntNum + MSTAR_FIQ_HYP_BASE - 32;
+
+	writeb(IntrMap, riu_addr);
+}
+
+void clear_intr_num()
+{
+	set_intr_num(16);
+}
+#endif
+
+void _handle_irq(unsigned int eIntNum)
+{
+#ifdef CONFIG_MP_INTR_ERROR_CHECK_DIE
+	set_intr_num(eIntNum);
+#endif
+	generic_handle_irq(eIntNum);
+#ifdef CONFIG_MP_INTR_ERROR_CHECK_DIE
+	clear_intr_num();
+#endif
+}
+
+static u16 MAsm_CPU_GetTrailOne(u16 u16Flags)
+{
+    u16  index = 0;
+
+    while((u16Flags & 0x01U) == 0x00U)
+    {
+        u16Flags = (u16Flags >> 1);
+        index++;
+        if(index == 16)
+        {
+            index = 16;
+            break;
+        }
+    }
+
+    return index;
+}
+
+
+#if (MP_PLATFORM_INT_1_to_1_SPI == 1)
+void arm_ack_irq(struct irq_data *d)
+{
+
+    if ((d->irq >= MSTAR_IRQ_BASE) && (d->irq <= MSTAR_CHIP_INT_END)) {
+        chip_irq_ack( spi_to_ppi[d->irq]);
+    }
+}
+
+#else
+static void arm_ack_irq(struct irq_data *d)
+{
+	chip_irq_ack(d->irq  - VIRTUAL_FIQ_START);
+}
+#endif
+
+#if (MP_PLATFORM_INT_1_to_1_SPI == 1)
+void arm_mask_irq(struct irq_data *d)
+{
+    if ((d->irq >= MSTAR_IRQ_BASE) && (d->irq <= MSTAR_CHIP_INT_END))
+    {
+		/* handle MSTAR IRQ controler */
+        spin_lock(&irq_controller_lock);
+        chip_irq_mask( spi_to_ppi[d->irq]);
+        spin_unlock(&irq_controller_lock);
+    }
+}
+#else
+static void arm_mask_irq(struct irq_data *d)
+{
+    /* handle MSTAR IRQ controler */
+    spin_lock(&irq_controller_lock);
+    chip_irq_mask( d->irq - VIRTUAL_FIQ_START);
+    spin_unlock(&irq_controller_lock);
+}
+#endif
+
+#if (MP_PLATFORM_INT_1_to_1_SPI == 1)
+void arm_unmask_irq(struct irq_data *d)
+{
+    if ((d->irq >= MSTAR_IRQ_BASE) && (d->irq <= MSTAR_CHIP_INT_END))
+    {
+		/* handle MSTAR IRQ controler */
+        spin_lock(&irq_controller_lock);
+		/* chip_irq_unmask( d->irq +160 - VIRTUAL_FIQ_START); */
+        chip_irq_unmask(spi_to_ppi[d->irq]);
+        spin_unlock(&irq_controller_lock);
+    }
+}
+#else
+static void arm_unmask_irq(struct irq_data *d)
+{
+    /* handle MSTAR IRQ controler */
+    spin_lock(&irq_controller_lock);
+    chip_irq_unmask( d->irq - VIRTUAL_FIQ_START);
+    spin_unlock(&irq_controller_lock);
+}
+#endif
+
+#if (MP_PLATFORM_INT_1_to_1_SPI == 1)
+static int arm_set_wake(struct irq_data *d, unsigned int on)
+{
+    return 0;
+}
+#else
+static int arm_set_wake(struct irq_data *d, unsigned int on)
+{
+    return 0;
+}
+#endif
+
+int arm_irq_type(struct irq_data *d, unsigned int type)
+{
+    return 0;
+}
+
+int arm_set_affinity(struct irq_data *d, const struct cpumask *mask_val, bool force)
+{
+    return 0;
+}
+
+#if (MP_PLATFORM_INT_1_to_1_SPI == 1)
+
+struct irq_chip arm_irq_chip = {
+    .name           = "MSTAR",
+    .irq_ack        = arm_ack_irq,
+    .irq_mask       = arm_mask_irq,
+    .irq_unmask     = arm_unmask_irq,
+    .irq_set_type   = arm_irq_type,
+    .irq_set_affinity = arm_set_affinity,
+    .irq_set_wake = arm_set_wake,
+};
+#else
+static struct irq_chip arm_irq_chip = {
+    .name           = "MSTAR",
+    .irq_ack        = arm_ack_irq,
+    .irq_mask       = arm_mask_irq,
+    .irq_unmask     = arm_unmask_irq,
+    .irq_set_type   = arm_irq_type,
+    .irq_set_affinity = arm_set_affinity,
+    .irq_set_wake = arm_set_wake,
+};
+#endif
+
+void Mstar_Chip_hw0_irqdispatch(void)
+{
+	u16                 u16Reg;
+	u16                 u16Bit;
+	InterruptNum        eIntNum;
+
+	u16Reg = REG(REG_IRQ_PENDING_L);
+
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_IRQL_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+
+	u16Reg = REG(REG_IRQ_PENDING_H);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_IRQH_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+	u16Reg = REG(REG_IRQ_EXP_PENDING_L);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_IRQEXPL_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+	u16Reg = REG(REG_IRQ_EXP_PENDING_H);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_IRQEXPH_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+}
+
+void Mstar_Chip_hw0_fiqdispatch(void)
+{
+	u16                 u16Reg;
+	u16                 u16Bit;
+	InterruptNum        eIntNum;
+
+	u16Reg = REG(REG_FIQ_PENDING_L);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_FIQL_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+
+	u16Reg = REG(REG_FIQ_PENDING_H);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_FIQH_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+
+	u16Reg = REG(REG_FIQ_EXP_PENDING_L);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_FIQEXPL_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+	u16Reg = REG(REG_FIQ_EXP_PENDING_H);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_FIQEXPH_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+
+}
+#if (MP_PLATFORM_FIQ_IRQ_HYP == 1)
+void Mstar_Chip_hw0_irqhyp_dispatch(void)
+{
+	u16                 u16Reg;
+	u16                 u16Bit;
+	InterruptNum        eIntNum;
+
+	u16Reg = REG(REG_IRQ_HYP_PENDING_L);
+
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_IRQHYPL_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+
+	u16Reg = REG(REG_IRQ_HYP_PENDING_H);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_IRQHYPH_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+	u16Reg = REG(REG_IRQ_SUP_PENDING_L);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_IRQSUPL_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+	u16Reg = REG(REG_IRQ_SUP_PENDING_H);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_IRQSUPH_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+}
+
+void Mstar_Chip_hw0_fiqhyp_dispatch(void)
+{
+	u16                 u16Reg;
+	u16                 u16Bit;
+	InterruptNum        eIntNum;
+
+	u16Reg = REG(REG_FIQ_HYP_PENDING_L);
+
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_FIQHYPL_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+
+	u16Reg = REG(REG_FIQ_HYP_PENDING_H);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_FIQHYPH_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+	u16Reg = REG(REG_FIQ_SUP_PENDING_L);
+
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_FIQSUPL_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+	u16Reg = REG(REG_FIQ_SUP_PENDING_H);
+	while ((u16Bit = MAsm_CPU_GetTrailOne(u16Reg)) != 16) {
+		eIntNum = (InterruptNum)(u16Bit + E_FIQSUPH_START);
+		_handle_irq((unsigned int)eIntNum);
+		u16Reg &= ~(0x1 << u16Bit);
+	}
+}
+#else
+void Mstar_Chip_hw0_fiqhyp_dispatch(void){}
+void Mstar_Chip_hw0_irqhyp_dispatch(void){}
+#endif
+
+static void arm_irq_handler(unsigned int irq, struct irq_desc *desc)
+{
+    struct irq_chip *chip = irq_desc_get_chip(desc);
+
+    chained_irq_enter(chip, desc);
+    Mstar_Chip_hw0_fiqdispatch();
+    Mstar_Chip_hw0_irqdispatch();
+    Mstar_Chip_hw0_fiqhyp_dispatch();
+    Mstar_Chip_hw0_irqhyp_dispatch();
+    chained_irq_exit(chip, desc);
+}
+
+void arm_interrupt_chain_setup(int chain_num)
+{
+    int i=0,j=0;
+
+
+    for (i = VIRTUAL_IRQ_START; i < VIRTUAL_IRQ_START + IRQ_NUMBER; i++) {
+         irq_set_chip(i, &arm_irq_chip);
+	 irq_set_handler(i, handle_level_irq);
+	 set_irq_flags(i, IRQF_VALID);
+    }
+
+    for (j = VIRTUAL_FIQ_START; j < VIRTUAL_FIQ_START + FIQ_NUMBER; j++) {
+    	 irq_set_chip(j, &arm_irq_chip);
+	 irq_set_handler(j, handle_level_irq);
+	 set_irq_flags(j, IRQF_VALID);
+    }
+#if (MP_PLATFORM_FIQ_IRQ_HYP == 1)
+    for (i = VIRTUAL_IRQ_HYP_START; i < VIRTUAL_IRQ_HYP_START + IRQ_HYP_NUMBER; i++) {
+	 irq_set_chip(i, &arm_irq_chip);
+	 irq_set_handler(i, handle_level_irq);
+	 set_irq_flags(i, IRQF_VALID);
+    }
+
+    for (i = VIRTUAL_FIQ_HYP_START; i < VIRTUAL_FIQ_HYP_START + FIQ_HYP_NUMBER; i++) {
+	 irq_set_chip(i, &arm_irq_chip);
+	 irq_set_handler(i, handle_level_irq);
+	 set_irq_flags(i, IRQF_VALID);
+    }
+#endif
+    irq_set_chained_handler(chain_num, arm_irq_handler);
+}

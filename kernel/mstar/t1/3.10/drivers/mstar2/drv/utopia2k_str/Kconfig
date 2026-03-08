@@ -1,0 +1,14 @@
+config MSTAR_UTOPIA2K_STR
+
+tristate "UTOPIA2K_STR"
+depends on MP_MSTAR_STR_BASE
+default n
+select SYS_SUPPORTS_APM_EMULATION
+select APM_EMULATION
+help
+    MStar Utopia2K STR driver function
+    Call all utopia modules' suspend/resume here
+    Report wake up event to Android
+
+config SYS_SUPPORTS_APM_EMULATION
+    bool
